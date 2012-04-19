@@ -41,7 +41,6 @@ vmlinuz
 System.map
 Module.markers
 Module.symvers
-/initramfs-list-min
 !.gitignore
 !.mailmap
 
