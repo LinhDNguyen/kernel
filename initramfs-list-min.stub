@@ -4,5 +4,3 @@
 # we can run build and installation of kernel modules.
 
 dir /dev 0755 0 0
-
-
