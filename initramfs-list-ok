@@ -92,6 +92,18 @@ dir /sbin 755 0 0
 dir /usr 755 0 0
 dir /usr/bin 755 0 0
 dir /usr/sbin 755 0 0
+dir /etc/ld.so.conf.d 0755 0 0
+dir /etc/network 0755 0 0
+dir /root 0755 0 0
+dir /mnt 0755 0 0
+dir /opt 0755 0 0
+dir /sys 0755 0 0
+dir /home 0755 0 0
+dir /home/ftp 0755 0 0
+dir /home/default 0755 0 0
+dir /tmp 0777 0 0
+dir /var 0755 0 0
+dir /usr/lib 0755 0 0
 
 dir /lib 755 0 0
 dir /lib/modules 755 0 0
@@ -103,8 +115,8 @@ dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/block 755 0 0
 dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/mtd 755 0 0
 dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/mtd/ubi 755 0 0
 
-#file /bin/busybox /opt/tmp/busybox-1.20.0/busybox 755 0 0
-file /bin/busybox /opt/tmp/busybox-20-ok 755 0 0
+file /bin/busybox /opt/tmp/busybox-1.20.0/busybox 4755 0 0
+#file /bin/busybox /opt/tmp/busybox-20-ok 755 0 0
 #create symbolic links
 slink /usr/bin/bunzip2    /bin/busybox 777 0 0
 slink /usr/bin/bzcat    /bin/busybox 777 0 0
@@ -444,24 +456,12 @@ file /etc/init.d/S01logging  /opt/buildroot/output/target/etc/init.d/S01logging 
 file /etc/init.d/S20urandom  /opt/buildroot/output/target/etc/init.d/S20urandom   755 0 0
 file /etc/init.d/S40network  /opt/buildroot/output/target/etc/init.d/S40network   755 0 0
 
-dir /etc/ld.so.conf.d 0755 0 0
-dir /etc/network 0755 0 0
-
 file /etc/network/interfaces  /opt/buildroot/output/target/etc/network/interfaces   644 0 0
 
 dir /etc/network/if-down.d 0755 0 0
 dir /etc/network/if-post-down.d 0755 0 0
 dir /etc/network/if-pre-up.d 0755 0 0
 dir /etc/network/if-up.d 0755 0 0
-
-dir /root 0755 0 0
-dir /mnt 0755 0 0
-dir /opt 0755 0 0
-dir /sys 0755 0 0
-dir /home 0755 0 0
-dir /tmp 0777 0 0
-dir /var 0755 0 0
-dir /usr/lib 0755 0 0
 
 file /root/.bash_history  /opt/buildroot/output/target/root/.bash_history   644 0 0
 file /root/.bash_logout  /opt/buildroot/output/target/root/.bash_logout   644 0 0
