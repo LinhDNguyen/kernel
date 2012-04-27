@@ -764,7 +764,6 @@ config SYSCTL
 
 config ANON_INODES
 	bool
-
 menuconfig EMBEDDED
 	bool "Configure standard kernel features (for small systems)"
 	help
