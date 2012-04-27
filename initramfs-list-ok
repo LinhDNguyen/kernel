@@ -1,0 +1,480 @@
+# This is a very simple, default initramfs
+
+dir /dev 0755 0 0
+nod /dev/console 0666 0 0 c 5 1
+nod /dev/null 0666 0 0 c 1 3
+nod /dev/mtd0 0666 0 0 c 90 0
+nod /dev/mtd1 0666 0 0 c 90 1
+nod /dev/mtd2 0666 0 0 c 90 2
+nod /dev/mtd3 0666 0 0 c 90 3
+nod /dev/mtdblock0 0666 0 0 b 31 0
+nod /dev/mtdblock1 0666 0 0 b 31 1
+nod /dev/mtdblock2 0666 0 0 b 31 2
+nod /dev/mtdblock3 0666 0 0 b 31 3
+nod /dev/mmcblk0 0666 0 0 b 179 0
+nod /dev/mmcblk0p1 0666 0 0 b 179 1
+nod /dev/tty 0666 0 0 c 5 0
+nod /dev/tty0 0666 0 0 c 4 0
+nod /dev/tty1 0666 0 0 c 4 1
+nod /dev/tty10 0666 0 0 c 4 10
+nod /dev/tty11 0666 0 0 c 4 11
+nod /dev/tty12 0666 0 0 c 4 12
+nod /dev/tty13 0666 0 0 c 4 13
+nod /dev/tty14 0666 0 0 c 4 14
+nod /dev/tty15 0666 0 0 c 4 15
+nod /dev/tty16 0666 0 0 c 4 16
+nod /dev/tty17 0666 0 0 c 4 17
+nod /dev/tty18 0666 0 0 c 4 18
+nod /dev/tty19 0666 0 0 c 4 19
+nod /dev/tty20 0666 0 0 c 4 20
+nod /dev/tty21 0666 0 0 c 4 21
+nod /dev/tty22 0666 0 0 c 4 22
+nod /dev/tty23 0666 0 0 c 4 23
+nod /dev/tty24 0666 0 0 c 4 24
+nod /dev/tty25 0666 0 0 c 4 25
+nod /dev/tty26 0666 0 0 c 4 26
+nod /dev/tty27 0666 0 0 c 4 27
+nod /dev/tty28 0666 0 0 c 4 28
+nod /dev/tty29 0666 0 0 c 4 29
+nod /dev/tty30 0666 0 0 c 4 30
+nod /dev/tty31 0666 0 0 c 4 31
+nod /dev/tty32 0666 0 0 c 4 32
+nod /dev/tty33 0666 0 0 c 4 33
+nod /dev/tty34 0666 0 0 c 4 34
+nod /dev/tty35 0666 0 0 c 4 35
+nod /dev/tty36 0666 0 0 c 4 36
+nod /dev/tty37 0666 0 0 c 4 37
+nod /dev/tty38 0666 0 0 c 4 38
+nod /dev/tty39 0666 0 0 c 4 39
+nod /dev/tty40 0666 0 0 c 4 40
+nod /dev/tty41 0666 0 0 c 4 41
+nod /dev/tty42 0666 0 0 c 4 42
+nod /dev/tty43 0666 0 0 c 4 43
+nod /dev/tty44 0666 0 0 c 4 44
+nod /dev/tty45 0666 0 0 c 4 45
+nod /dev/tty46 0666 0 0 c 4 46
+nod /dev/tty47 0666 0 0 c 4 47
+nod /dev/tty48 0666 0 0 c 4 48
+nod /dev/tty49 0666 0 0 c 4 49
+nod /dev/tty5 0666 0 0 c 4 5
+nod /dev/tty50 0666 0 0 c 4 50
+nod /dev/tty51 0666 0 0 c 4 51
+nod /dev/tty52 0666 0 0 c 4 52
+nod /dev/tty53 0666 0 0 c 4 53
+nod /dev/tty54 0666 0 0 c 4 54
+nod /dev/tty55 0666 0 0 c 4 55
+nod /dev/tty56 0666 0 0 c 4 56
+nod /dev/tty57 0666 0 0 c 4 57
+nod /dev/tty58 0666 0 0 c 4 58
+nod /dev/tty59 0666 0 0 c 4 59
+nod /dev/tty6 0666 0 0 c 4 6
+nod /dev/tty60 0666 0 0 c 4 60
+nod /dev/tty61 0666 0 0 c 4 61
+nod /dev/tty62 0666 0 0 c 4 62
+nod /dev/tty63 0666 0 0 c 4 63
+nod /dev/tty7 0666 0 0 c 4 7
+nod /dev/tty8 0666 0 0 c 4 8
+nod /dev/tty9 0666 0 0 c 4 9
+nod /dev/ttyS0 0666 0 0 c 4 64
+nod /dev/ttyS1 0666 0 0 c 4 65
+nod /dev/ttyS2 0666 0 0 c 4 66
+nod /dev/ttyS3 0666 0 0 c 4 67
+nod /dev/ttyUSB0 0666 0 0 c 188 0
+
+dir /root 0700 0 0
+dir /bin 755 0 0
+dir /dev 755 0 0
+dir /dev/vc 755 0 0
+dir /etc 755 0 0
+dir /etc/init.d 755 0 0
+dir /proc 755 0 0
+dir /sbin 755 0 0
+dir /usr 755 0 0
+dir /usr/bin 755 0 0
+dir /usr/sbin 755 0 0
+
+dir /lib 755 0 0
+dir /lib/modules 755 0 0
+dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e 755 0 0
+dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel 755 0 0
+dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto 755 0 0
+dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers 755 0 0
+dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/block 755 0 0
+dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/mtd 755 0 0
+dir /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/mtd/ubi 755 0 0
+
+#file /bin/busybox /opt/tmp/busybox-1.20.0/busybox 755 0 0
+file /bin/busybox /opt/tmp/busybox-20-ok 755 0 0
+#create symbolic links
+slink /usr/bin/bunzip2    /bin/busybox 777 0 0
+slink /usr/bin/bzcat    /bin/busybox 777 0 0
+slink /bin/date    /bin/busybox 777 0 0
+slink /usr/bin/hostid    /bin/busybox 777 0 0
+slink /usr/bin/groups    /bin/busybox 777 0 0
+slink /usr/bin/id    /bin/busybox 777 0 0
+slink /bin/touch    /bin/busybox 777 0 0
+slink /bin/base64    /bin/busybox 777 0 0
+slink /usr/bin/patch    /bin/busybox 777 0 0
+slink /bin/vi    /bin/busybox 777 0 0
+slink /usr/bin/find    /bin/busybox 777 0 0
+slink /bin/grep    /bin/busybox 777 0 0
+slink /bin/egrep    /bin/busybox 777 0 0
+slink /bin/fgrep    /bin/busybox 777 0 0
+slink /usr/bin/xargs    /bin/busybox 777 0 0
+slink /sbin/bootchartd    /bin/busybox 777 0 0
+slink /sbin/halt    /bin/busybox 777 0 0
+slink /sbin/poweroff    /bin/busybox 777 0 0
+slink /sbin/reboot    /bin/busybox 777 0 0
+slink /sbin/init    /bin/busybox 777 0 0
+slink /linuxrc    /bin/busybox 777 0 0
+slink /usr/bin/mesg    /bin/busybox 777 0 0
+slink /usr/bin/add-shell    /bin/busybox 777 0 0
+slink /usr/bin/remove-shell    /bin/busybox 777 0 0
+slink /bin/conspy    /bin/busybox 777 0 0
+slink /usr/sbin/nandwrite    /bin/busybox 777 0 0
+slink /usr/sbin/nanddump    /bin/busybox 777 0 0
+slink /bin/setserial    /bin/busybox 777 0 0
+slink /usr/sbin/ubiattach    /bin/busybox 777 0 0
+slink /usr/sbin/ubidetach    /bin/busybox 777 0 0
+slink /usr/sbin/ubimkvol    /bin/busybox 777 0 0
+slink /usr/sbin/ubirmvol    /bin/busybox 777 0 0
+slink /usr/sbin/ubirsvol    /bin/busybox 777 0 0
+slink /usr/sbin/ubiupdatevol    /bin/busybox 777 0 0
+slink /sbin/modinfo    /bin/busybox 777 0 0
+slink /sbin/modprobe    /bin/busybox 777 0 0
+slink /sbin/depmod    /bin/busybox 777 0 0
+slink /sbin/insmod    /bin/busybox 777 0 0
+slink /sbin/lsmod    /bin/busybox 777 0 0
+slink /sbin/rmmod    /bin/busybox 777 0 0
+slink /usr/sbin/nbd-client    /bin/busybox 777 0 0
+slink /bin/ping    /bin/busybox 777 0 0
+slink /usr/bin/whois    /bin/busybox 777 0 0
+slink /bin/iostat    /bin/busybox 777 0 0
+slink /usr/bin/lsof    /bin/busybox 777 0 0
+slink /bin/mpstat    /bin/busybox 777 0 0
+slink /usr/bin/pmap    /bin/busybox 777 0 0
+slink /bin/powertop    /bin/busybox 777 0 0
+slink /usr/bin/pstree    /bin/busybox 777 0 0
+slink /usr/bin/pwdx    /bin/busybox 777 0 0
+slink /usr/bin/smemcap    /bin/busybox 777 0 0
+slink /bin/hush    /bin/busybox 777 0 0
+slink /bin/msh    /bin/busybox 777 0 0
+slink /bin/sh    /bin/busybox 777 0 0
+slink /sbin/blockdev    /bin/busybox 777 0 0
+slink /sbin/mdev    /bin/busybox 777 0 0
+slink /bin/rev    /bin/busybox 777 0 0
+slink /usr/bin/[    /bin/busybox 777 0 0
+slink /usr/bin/[[    /bin/busybox 777 0 0
+slink /sbin/acpid    /bin/busybox 777 0 0
+slink /bin/addgroup    /bin/busybox 777 0 0
+slink /bin/adduser    /bin/busybox 777 0 0
+slink /sbin/adjtimex    /bin/busybox 777 0 0
+slink /sbin/arp    /bin/busybox 777 0 0
+slink /usr/bin/awk    /bin/busybox 777 0 0
+slink /usr/bin/basename    /bin/busybox 777 0 0
+slink /bin/bbconfig    /bin/busybox 777 0 0
+slink /usr/bin/beep    /bin/busybox 777 0 0
+slink /sbin/blkid    /bin/busybox 777 0 0
+slink /usr/bin/bzip2    /bin/busybox 777 0 0
+slink /bin/cat    /bin/busybox 777 0 0
+slink /usr/bin/chat    /bin/busybox 777 0 0
+slink /bin/chattr    /bin/busybox 777 0 0
+slink /bin/chgrp    /bin/busybox 777 0 0
+slink /bin/chmod    /bin/busybox 777 0 0
+slink /bin/chown    /bin/busybox 777 0 0
+slink /usr/sbin/chpasswd    /bin/busybox 777 0 0
+slink /usr/bin/chpst    /bin/busybox 777 0 0
+slink /usr/sbin/chroot    /bin/busybox 777 0 0
+slink /usr/bin/chrt    /bin/busybox 777 0 0
+slink /usr/bin/cksum    /bin/busybox 777 0 0
+slink /usr/bin/clear    /bin/busybox 777 0 0
+slink /usr/bin/comm    /bin/busybox 777 0 0
+slink /bin/cp    /bin/busybox 777 0 0
+slink /usr/sbin/crond    /bin/busybox 777 0 0
+slink /usr/bin/crontab    /bin/busybox 777 0 0
+slink /usr/bin/cryptpw    /bin/busybox 777 0 0
+slink /usr/bin/cut    /bin/busybox 777 0 0
+slink /usr/bin/dc    /bin/busybox 777 0 0
+slink /bin/dd    /bin/busybox 777 0 0
+slink /bin/delgroup    /bin/busybox 777 0 0
+slink /bin/deluser    /bin/busybox 777 0 0
+slink /sbin/devmem    /bin/busybox 777 0 0
+slink /bin/df    /bin/busybox 777 0 0
+slink /usr/sbin/dhcprelay    /bin/busybox 777 0 0
+slink /usr/bin/dirname    /bin/busybox 777 0 0
+slink /bin/dmesg    /bin/busybox 777 0 0
+slink /bin/dnsdomainname    /bin/busybox 777 0 0
+slink /usr/bin/dumpleases    /bin/busybox 777 0 0
+slink /bin/echo    /bin/busybox 777 0 0
+slink /usr/bin/eject    /bin/busybox 777 0 0
+slink /usr/bin/env    /bin/busybox 777 0 0
+slink /usr/bin/envdir    /bin/busybox 777 0 0
+slink /usr/bin/envuidgid    /bin/busybox 777 0 0
+slink /bin/false    /bin/busybox 777 0 0
+slink /usr/sbin/fbset    /bin/busybox 777 0 0
+slink /sbin/fbsplash    /bin/busybox 777 0 0
+slink /bin/fdflush    /bin/busybox 777 0 0
+slink /usr/bin/fdformat    /bin/busybox 777 0 0
+slink /sbin/fdisk    /bin/busybox 777 0 0
+slink /usr/bin/fgconsole    /bin/busybox 777 0 0
+slink /usr/sbin/flash_eraseall    /bin/busybox 777 0 0
+slink /usr/sbin/flash_lock    /bin/busybox 777 0 0
+slink /usr/sbin/flash_unlock    /bin/busybox 777 0 0
+slink /usr/sbin/flashcp    /bin/busybox 777 0 0
+slink /usr/bin/flock    /bin/busybox 777 0 0
+slink /usr/bin/free    /bin/busybox 777 0 0
+slink /sbin/freeramdisk    /bin/busybox 777 0 0
+slink /sbin/fsck    /bin/busybox 777 0 0
+slink /bin/fsync    /bin/busybox 777 0 0
+slink /usr/sbin/ftpd    /bin/busybox 777 0 0
+slink /usr/bin/ftpget    /bin/busybox 777 0 0
+slink /usr/bin/ftpput    /bin/busybox 777 0 0
+slink /usr/bin/fuser    /bin/busybox 777 0 0
+slink /sbin/getty    /bin/busybox 777 0 0
+slink /bin/gunzip    /bin/busybox 777 0 0
+slink /bin/gzip    /bin/busybox 777 0 0
+slink /sbin/hdparm    /bin/busybox 777 0 0
+slink /bin/hostname    /bin/busybox 777 0 0
+slink /sbin/ifconfig    /bin/busybox 777 0 0
+slink /sbin/ifdown    /bin/busybox 777 0 0
+slink /usr/bin/ifplugd    /bin/busybox 777 0 0
+slink /sbin/ifup    /bin/busybox 777 0 0
+slink /usr/sbin/inetd    /bin/busybox 777 0 0
+slink /sbin/inotifyd    /bin/busybox 777 0 0
+slink /usr/bin/install    /bin/busybox 777 0 0
+slink /bin/ionice    /bin/busybox 777 0 0
+slink /bin/ip    /bin/busybox 777 0 0
+slink /bin/ipaddr    /bin/busybox 777 0 0
+slink /bin/iplink    /bin/busybox 777 0 0
+slink /bin/iproute    /bin/busybox 777 0 0
+slink /bin/iprule    /bin/busybox 777 0 0
+slink /bin/iptunnel    /bin/busybox 777 0 0
+slink /bin/kill    /bin/busybox 777 0 0
+slink /usr/bin/killall    /bin/busybox 777 0 0
+slink /usr/bin/killall5    /bin/busybox 777 0 0
+slink /sbin/klogd    /bin/busybox 777 0 0
+slink /usr/bin/less    /bin/busybox 777 0 0
+slink /bin/ln    /bin/busybox 777 0 0
+slink /usr/bin/logger    /bin/busybox 777 0 0
+slink /bin/login    /bin/busybox 777 0 0
+slink /sbin/logread    /bin/busybox 777 0 0
+slink /bin/ls    /bin/busybox 777 0 0
+slink /bin/lsattr    /bin/busybox 777 0 0
+slink /usr/bin/lspci    /bin/busybox 777 0 0
+slink /usr/bin/lsusb    /bin/busybox 777 0 0
+slink /bin/lzop    /bin/busybox 777 0 0
+slink /usr/bin/lzopcat    /bin/busybox 777 0 0
+slink /sbin/makedevs    /bin/busybox 777 0 0
+slink /bin/makemime    /bin/busybox 777 0 0
+slink /sbin/man    /bin/busybox 777 0 0
+slink /usr/bin/md5sum    /bin/busybox 777 0 0
+slink /bin/mkdir    /bin/busybox 777 0 0
+slink /sbin/mkdosfs    /bin/busybox 777 0 0
+slink /sbin/mke2fs    /bin/busybox 777 0 0
+slink /sbin/mkfs.ext2    /bin/busybox 777 0 0
+slink /sbin/mkfs.vfat    /bin/busybox 777 0 0
+slink /bin/mknod    /bin/busybox 777 0 0
+slink /usr/bin/mkpasswd    /bin/busybox 777 0 0
+slink /sbin/mkswap    /bin/busybox 777 0 0
+slink /bin/mktemp    /bin/busybox 777 0 0
+slink /bin/more    /bin/busybox 777 0 0
+slink /bin/mount    /bin/busybox 777 0 0
+slink /bin/mountpoint    /bin/busybox 777 0 0
+slink /bin/mv    /bin/busybox 777 0 0
+slink /bin/netstat    /bin/busybox 777 0 0
+slink /usr/sbin/ntpd    /bin/busybox 777 0 0
+slink /usr/bin/passwd    /bin/busybox 777 0 0
+slink /usr/bin/pgrep    /bin/busybox 777 0 0
+slink /bin/pidof    /bin/busybox 777 0 0
+slink /bin/pipe_progress    /bin/busybox 777 0 0
+slink /usr/bin/pkill    /bin/busybox 777 0 0
+slink /usr/sbin/popmaildir    /bin/busybox 777 0 0
+slink /bin/printenv    /bin/busybox 777 0 0
+slink /usr/bin/printf    /bin/busybox 777 0 0
+slink /bin/ps    /bin/busybox 777 0 0
+slink /bin/pwd    /bin/busybox 777 0 0
+slink /sbin/raidautorun    /bin/busybox 777 0 0
+slink /usr/sbin/rdev    /bin/busybox 777 0 0
+slink /usr/bin/readahead    /bin/busybox 777 0 0
+slink /bin/reformime    /bin/busybox 777 0 0
+slink /usr/bin/renice    /bin/busybox 777 0 0
+slink /usr/sbin/rfkill    /bin/busybox 777 0 0
+slink /bin/rm    /bin/busybox 777 0 0
+slink /bin/rmdir    /bin/busybox 777 0 0
+slink /bin/run-parts    /bin/busybox 777 0 0
+slink /usr/bin/runsv    /bin/busybox 777 0 0
+slink /usr/bin/runsvdir    /bin/busybox 777 0 0
+slink /usr/bin/rx    /bin/busybox 777 0 0
+slink /bin/scriptreplay    /bin/busybox 777 0 0
+slink /bin/sed    /bin/busybox 777 0 0
+slink /usr/bin/seq    /bin/busybox 777 0 0
+slink /usr/sbin/setfont    /bin/busybox 777 0 0
+slink /usr/bin/setsid    /bin/busybox 777 0 0
+slink /usr/bin/setuidgid    /bin/busybox 777 0 0
+slink /usr/bin/sha256sum    /bin/busybox 777 0 0
+slink /usr/bin/sha512sum    /bin/busybox 777 0 0
+slink /usr/bin/showkey    /bin/busybox 777 0 0
+slink /bin/sleep    /bin/busybox 777 0 0
+slink /usr/bin/softlimit    /bin/busybox 777 0 0
+slink /sbin/start-stop-daemon    /bin/busybox 777 0 0
+slink /bin/stat    /bin/busybox 777 0 0
+slink /usr/bin/strings    /bin/busybox 777 0 0
+slink /bin/su    /bin/busybox 777 0 0
+slink /sbin/sulogin    /bin/busybox 777 0 0
+slink /usr/bin/sv    /bin/busybox 777 0 0
+slink /usr/sbin/svlogd    /bin/busybox 777 0 0
+slink /sbin/sysctl    /bin/busybox 777 0 0
+slink /sbin/syslogd    /bin/busybox 777 0 0
+slink /usr/bin/tail    /bin/busybox 777 0 0
+slink /bin/tar    /bin/busybox 777 0 0
+slink /usr/bin/taskset    /bin/busybox 777 0 0
+slink /usr/bin/tee    /bin/busybox 777 0 0
+slink /usr/bin/telnet    /bin/busybox 777 0 0
+slink /usr/sbin/telnetd    /bin/busybox 777 0 0
+slink /usr/bin/test    /bin/busybox 777 0 0
+slink /usr/bin/tftp    /bin/busybox 777 0 0
+slink /usr/bin/tftpd    /bin/busybox 777 0 0
+slink /usr/bin/time    /bin/busybox 777 0 0
+slink /usr/bin/timeout    /bin/busybox 777 0 0
+slink /usr/bin/top    /bin/busybox 777 0 0
+slink /bin/true    /bin/busybox 777 0 0
+slink /usr/bin/tty    /bin/busybox 777 0 0
+slink /usr/bin/ttysize    /bin/busybox 777 0 0
+slink /sbin/tunctl    /bin/busybox 777 0 0
+slink /sbin/tune2fs    /bin/busybox 777 0 0
+slink /sbin/udhcpc    /bin/busybox 777 0 0
+slink /usr/sbin/udhcpd    /bin/busybox 777 0 0
+slink /bin/umount    /bin/busybox 777 0 0
+slink /bin/uname    /bin/busybox 777 0 0
+slink /bin/uncompress    /bin/busybox 777 0 0
+slink /usr/bin/unxz    /bin/busybox 777 0 0
+slink /usr/bin/unlzop    /bin/busybox 777 0 0
+slink /usr/bin/unzip    /bin/busybox 777 0 0
+slink /usr/bin/uptime    /bin/busybox 777 0 0
+slink /usr/bin/volname    /bin/busybox 777 0 0
+slink /bin/watch    /bin/busybox 777 0 0
+slink /usr/bin/wc    /bin/busybox 777 0 0
+slink /usr/bin/which    /bin/busybox 777 0 0
+slink /usr/bin/whoami    /bin/busybox 777 0 0
+slink /usr/bin/xzcat    /bin/busybox 777 0 0
+slink /usr/bin/xz    /bin/busybox 777 0 0
+slink /usr/bin/yes    /bin/busybox 777 0 0
+slink /bin/zcat    /bin/busybox 777 0 0
+
+
+##########################LIBS FILES####################################
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.alias /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.alias 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.alias.bin /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.alias.bin 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.builtin /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.builtin 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.builtin.bin /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.builtin.bin 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.ccwmap /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.ccwmap 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.dep /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.dep 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.dep.bin /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.dep.bin 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.devname /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.devname 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.ieee1394map /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.ieee1394map 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.inputmap /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.inputmap 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.isapnpmap /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.isapnpmap 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.ofmap /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.ofmap 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.order /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.order 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.pcimap /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.pcimap 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.seriomap /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.seriomap 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.softdep /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.softdep 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.symbols /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.symbols 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.symbols.bin /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.symbols.bin 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.usbmap /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/modules.usbmap 644 0 0
+
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/aead.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/aead.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/aes_generic.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/aes_generic.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/ansi_cprng.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/ansi_cprng.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/cbc.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/cbc.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/chainiv.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/chainiv.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_algapi.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_algapi.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_blkcipher.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_blkcipher.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_hash.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_hash.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/cryptomgr.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/cryptomgr.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_wq.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/crypto_wq.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/eseqiv.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/eseqiv.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/krng.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/krng.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/pcompress.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/pcompress.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/rng.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/crypto/rng.ko 644 0 0
+
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/block/cryptoloop.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/block/cryptoloop.ko 644 0 0
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/block/loop.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/block/loop.ko 644 0 0
+
+file /lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/mtd/ubi/ubi.ko /opt/tmp/rootfs/lib/modules/2.6.33-arm1linh-00276-g5479f8e/kernel/drivers/mtd/ubi/ubi.ko 644 0 0
+
+#####################ETC FILES###########################
+
+#---Empty files
+file /dev/tty2 /opt/tmp/rootfs/dev/tty2 644 0 0
+file /dev/tty3 /opt/tmp/rootfs/dev/tty3 644 0 0
+file /dev/tty4 /opt/tmp/rootfs/dev/tty4 644 0 0
+
+file /dev/vc/2 /opt/tmp/rootfs/dev/tty4 644 0 0
+file /dev/vc/3 /opt/tmp/rootfs/dev/tty4 644 0 0
+file /dev/vc/4 /opt/tmp/rootfs/dev/tty4 644 0 0
+
+#---init files
+
+file /etc/fstab  /opt/buildroot/output/target/etc/fstab   644 0 0
+file /etc/group  /opt/buildroot/output/target/etc/group   644 0 0
+file /etc/hostname  /opt/buildroot/output/target/etc/hostname   644 0 0
+file /etc/hosts  /opt/buildroot/output/target/etc/hosts   644 0 0
+file /etc/inittab  /opt/buildroot/output/target/etc/inittab   644 0 0
+file /etc/inputrc  /opt/buildroot/output/target/etc/inputrc   644 0 0
+file /etc/issue  /opt/buildroot/output/target/etc/issue   644 0 0
+file /etc/ld.so.cache  /opt/buildroot/output/target/etc/ld.so.cache   644 0 0
+file /etc/ld.so.conf  /opt/buildroot/output/target/etc/ld.so.conf   644 0 0
+file /etc/os-release  /opt/buildroot/output/target/etc/os-release   644 0 0
+file /etc/passwd  /opt/buildroot/output/target/etc/passwd   644 0 0
+file /etc/profile  /opt/buildroot/output/target/etc/profile   644 0 0
+file /etc/protocols  /opt/buildroot/output/target/etc/protocols   644 0 0
+file /etc/random-seed  /opt/buildroot/output/target/etc/random-seed   644 0 0
+file /etc/securetty  /opt/buildroot/output/target/etc/securetty   644 0 0
+file /etc/services  /opt/buildroot/output/target/etc/services   644 0 0
+file /etc/shadow  /opt/buildroot/output/target/etc/shadow   644 0 0
+file /etc/TZ  /opt/buildroot/output/target/etc/TZ   644 0 0
+file /etc/resolv.conf  /etc/resolv.conf   644 0 0
+slink /etc/mtab    /proc/mounts 777 0 0
+
+file /etc/init.d/rcK  /opt/buildroot/output/target/etc/init.d/rcK   755 0 0
+file /etc/init.d/rcS  /opt/buildroot/output/target/etc/init.d/rcS   755 0 0
+file /etc/init.d/S01logging  /opt/buildroot/output/target/etc/init.d/S01logging   755 0 0
+file /etc/init.d/S20urandom  /opt/buildroot/output/target/etc/init.d/S20urandom   755 0 0
+file /etc/init.d/S40network  /opt/buildroot/output/target/etc/init.d/S40network   755 0 0
+
+dir /etc/ld.so.conf.d 0755 0 0
+dir /etc/network 0755 0 0
+
+file /etc/network/interfaces  /opt/buildroot/output/target/etc/network/interfaces   644 0 0
+
+dir /etc/network/if-down.d 0755 0 0
+dir /etc/network/if-post-down.d 0755 0 0
+dir /etc/network/if-pre-up.d 0755 0 0
+dir /etc/network/if-up.d 0755 0 0
+
+dir /root 0755 0 0
+dir /mnt 0755 0 0
+dir /opt 0755 0 0
+dir /sys 0755 0 0
+dir /home 0755 0 0
+dir /tmp 0777 0 0
+dir /var 0755 0 0
+dir /usr/lib 0755 0 0
+
+file /root/.bash_history  /opt/buildroot/output/target/root/.bash_history   644 0 0
+file /root/.bash_logout  /opt/buildroot/output/target/root/.bash_logout   644 0 0
+file /root/.bash_profile  /opt/buildroot/output/target/root/.bash_profile   644 0 0
+
+slink /var/cache    /tmp 777 0 0
+slink /var/lock    /tmp 777 0 0
+slink /var/log    /tmp 777 0 0
+slink /var/pcmcia    /tmp 777 0 0
+slink /var/run    /tmp 777 0 0
+slink /var/spool    /tmp 777 0 0
+slink /var/tmp    /tmp 777 0 0
+
+
+
+

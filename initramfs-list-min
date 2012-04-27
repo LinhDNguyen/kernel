@@ -24,7 +24,7 @@ dir /etc 0755 0 0
 # Last modified: 1211381152
 
 dir /bin 755 0 0
-file /bin/busybox /opt/tmp/busybox-1.19.4/busybox 755 0 0
+file /bin/busybox /opt/tmp/busybox-1.20.0/busybox 755 0 0
 #file /bin/busybox /opt/tmp/busybox 755 0 0
 slink /linuxrc /bin/busybox 777 0 0
 slink /bin/cat busybox 777 0 0
