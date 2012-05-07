@@ -50,6 +50,11 @@ config KINETIS_FB
 	bool "Enable Freescale Kinetis framebuffer"
 	default n
 
+config KINETIS_TWR_LEDS
+	depends on ARCH_KINETIS
+	bool "Enable Kinetis TWR LEDs driver"
+	default y
+
 endmenu
 
 endif
