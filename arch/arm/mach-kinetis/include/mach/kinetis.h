@@ -88,6 +88,16 @@ struct kinetis_sim_regs {
 	u32 mcr;	/* Misc Control Register */
 };
 
+enum sim_csgc_number{
+	csgc1 = 0,
+	csgc2,
+	csgc3,
+	csgc4,
+	csgc5,
+	csgc6,
+	csgc7
+};
+
 /*
  * SIM registers base
  */
