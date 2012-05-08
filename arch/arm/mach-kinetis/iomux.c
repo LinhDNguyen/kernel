@@ -267,6 +267,7 @@ static const struct kinetis_gpio_pin_config twr_k70f120m_gpio[] = {
 	/* F.27 = GLCD_D23 */
 	{{KINETIS_GPIO_PORT_F, 27}, KINETIS_GPIO_CONFIG_DSE(7)},
 #endif /* CONFIG_KINETIS_FB */
+#if CONFIG_KINETIS_LEDS_ENABLE
 	/* A.10 = LED_ORG */
 	{{KINETIS_GPIO_PORT_A, 10}, KINETIS_GPIO_CONFIG_MUX(1)},
 	/* A.28 = LED_YEL */
@@ -275,6 +276,7 @@ static const struct kinetis_gpio_pin_config twr_k70f120m_gpio[] = {
 	{{KINETIS_GPIO_PORT_A, 29}, KINETIS_GPIO_CONFIG_MUX(1)},
 	/* A.11 = LED_RED */
 	{{KINETIS_GPIO_PORT_A, 11}, KINETIS_GPIO_CONFIG_MUX(1)},
+#endif /* CONFIG_KINETIS_LEDS_ENABLE */
 };
 
 /*
