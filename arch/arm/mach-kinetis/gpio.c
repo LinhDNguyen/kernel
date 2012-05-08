@@ -38,6 +38,14 @@
 void __init kinetis_gpio_init(void)
 {
 	KINETIS_SIM->scgc[5] |= 0x00 | (1<<KINETIS_SIM_SCGC5_PORTA) | (1<<KINETIS_SIM_SCGC5_PORTB) | (1<<KINETIS_SIM_SCGC5_PORTC) | (1<<KINETIS_SIM_SCGC5_PORTD) | (1<<KINETIS_SIM_SCGC5_PORTE) | (1<<KINETIS_SIM_SCGC5_PORTF);
+
+#if CONFIG_KINETIS_LEDS_ENABLE
+	// Config as output
+	GPIOA_PDDR |= 0x00 | (1 << K70_LED0_IDX) | (1 << K70_LED1_IDX) | (1 << K70_LED2_IDX) | (1 << K70_LED3_IDX);
+	// Clear all leds
+	GPIOA_PCOR |= 0x00 | (1 << K70_LED0_IDX) | (1 << K70_LED1_IDX) | (1 << K70_LED2_IDX) | (1 << K70_LED3_IDX);
+#endif /*CONFIG_KINETIS_LEDS_ENABLE*/
+	
 	return;
 }
 
