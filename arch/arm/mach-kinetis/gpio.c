@@ -37,7 +37,7 @@
 
 void __init kinetis_gpio_init(void)
 {
-	KINETIS_SIM->scgc[4] |= CYGHWR_HAL_KINETIS_SIM_SCGC5_ALLPORT_M
+	KINETIS_SIM->scgc[4] |= 0x00 | CYGHWR_HAL_KINETIS_SIM_SCGC5_ALLPORT_M;
 
 #if CONFIG_KINETIS_LEDS_ENABLE
 	// Config as output
