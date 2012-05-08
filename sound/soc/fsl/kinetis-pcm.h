@@ -19,19 +19,19 @@
 #ifndef _MXS_PCM_H
 #define _MXS_PCM_H
 
-struct mxs_pcm_dma_params {
+struct k70_pcm_dma_params {
 	char *name;
 	int dma_bus;	/* DMA bus */
 	int dma_ch;	/* DMA channel number */
 	int irq;	/* DMA interrupt number */
 };
-struct mxs_runtime_data {
+struct k70_runtime_data {
 	u32 dma_ch;
 	u32 dma_period;
 	u32 dma_totsize;
 	unsigned long appl_ptr_bytes;
 	int format;
-	struct mxs_pcm_dma_params *params;
+	struct k70_pcm_dma_params *params;
 	struct mxs_dma_desc *dma_desc_array[255];
 };
 

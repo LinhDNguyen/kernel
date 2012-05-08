@@ -62,7 +62,7 @@ static irqreturn_t mxs_pcm_dma_irq(int irq, void *dev_id)
 {
 	struct snd_pcm_substream *substream = dev_id;
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd = substream->runtime->private_data;
+	struct k70_runtime_data *prtd = substream->runtime->private_data;
 	struct mxs_dma_info dma_info;
 	void *pdma;
 	unsigned long prev_appl_offset, appl_count, cont, appl_ptr_bytes;
@@ -112,7 +112,7 @@ static irqreturn_t mxs_pcm_dma_irq(int irq, void *dev_id)
 static int mxs_pcm_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd = runtime->private_data;
+	struct k70_runtime_data *prtd = runtime->private_data;
 	dma_addr_t dma_buffer_phys;
 	int periods_num, playback, i;
 
@@ -166,7 +166,7 @@ static int mxs_pcm_prepare(struct snd_pcm_substream *substream)
 static void mxs_pcm_stop(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd = runtime->private_data;
+	struct k70_runtime_data *prtd = runtime->private_data;
 	struct mxs_dma_info dma_info;
 	int desc;
 
@@ -199,7 +199,7 @@ static void mxs_pcm_stop(struct snd_pcm_substream *substream)
 static int mxs_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd = substream->runtime->private_data;
+	struct k70_runtime_data *prtd = substream->runtime->private_data;
 	int ret = 0;
 	switch (cmd) {
 
@@ -244,7 +244,7 @@ static snd_pcm_uframes_t
 mxs_pcm_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd = runtime->private_data;
+	struct k70_runtime_data *prtd = runtime->private_data;
 	struct mxs_dma_info dma_info;
 	unsigned int offset;
 	dma_addr_t pos;
@@ -263,7 +263,7 @@ mxs_pcm_pointer(struct snd_pcm_substream *substream)
 static int mxs_pcm_hw_params(struct snd_pcm_substream *substream,
 				  struct snd_pcm_hw_params *hw_params)
 {
-	struct mxs_runtime_data *prtd = substream->runtime->private_data;
+	struct k70_runtime_data *prtd = substream->runtime->private_data;
 
 	prtd->dma_period = params_period_bytes(hw_params);
 	prtd->dma_totsize = params_buffer_bytes(hw_params);
@@ -282,8 +282,8 @@ static int mxs_pcm_dma_request(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct mxs_runtime_data *prtd = runtime->private_data;
-	struct mxs_pcm_dma_params *dma_data =
+	struct k70_runtime_data *prtd = runtime->private_data;
+	struct k70_pcm_dma_params *dma_data =
 		snd_soc_dai_get_dma_data(rtd->dai->cpu_dai, substream);
 	int desc_num = mxs_pcm_hardware.periods_max;
 	int desc;
@@ -337,7 +337,7 @@ err:
 static int mxs_pcm_open(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd;
+	struct k70_runtime_data *prtd;
 	int ret;
 
 	/* Ensure that buffer size is a multiple of the period size */
@@ -348,7 +348,7 @@ static int mxs_pcm_open(struct snd_pcm_substream *substream)
 
 	snd_soc_set_runtime_hwparams(substream, &mxs_pcm_hardware);
 
-	prtd = kzalloc(sizeof(struct mxs_runtime_data), GFP_KERNEL);
+	prtd = kzalloc(sizeof(struct k70_runtime_data), GFP_KERNEL);
 	if (prtd == NULL)
 		return -ENOMEM;
 
@@ -366,7 +366,7 @@ static int mxs_pcm_open(struct snd_pcm_substream *substream)
 static int mxs_pcm_close(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd = runtime->private_data;
+	struct k70_runtime_data *prtd = runtime->private_data;
 	int desc_num = mxs_pcm_hardware.periods_max;
 	int desc;
 
@@ -391,7 +391,7 @@ static int mcs_pcm_copy(struct snd_pcm_substream *substream, int channel,
 			snd_pcm_uframes_t frames)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
-	struct mxs_runtime_data *prtd = runtime->private_data;
+	struct k70_runtime_data *prtd = runtime->private_data;
 	char *hwbuf = runtime->dma_area + frames_to_bytes(runtime, hwoff);
 	unsigned long count = frames_to_bytes(runtime, frames);
 
