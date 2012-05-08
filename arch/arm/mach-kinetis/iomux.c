@@ -162,6 +162,7 @@ int kinetis_gpio_config(const struct kinetis_gpio_dsc *dsc, u32 regval)
 	 * Verify the function arguments
 	 */
 	rv = kinetis_validate_gpio(dsc);
+	printk("kinetis_gpio_config: rv = %d\n", rv);
 	if (rv != 0)
 		goto out;
 
@@ -176,6 +177,7 @@ int kinetis_gpio_config(const struct kinetis_gpio_dsc *dsc, u32 regval)
 	 * Configure the pin
 	 */
 	KINETIS_PORT(dsc->port)->pcr[dsc->pin] = regval;
+	printk("kinetis_gpio_config: %d, %d, %d", dsc->port, dsc->pin, regval);
 
 	rv = 0;
 out:
@@ -192,6 +194,7 @@ int kinetis_gpio_config_table(
 	unsigned int i;
 	int rv;
 
+	printk("kinetis_gpio_config_table\n");
 	for (i = 0; i < len; i ++) {
 		rv = kinetis_gpio_config(&table[i].dsc, table[i].regval);
 		if (rv != 0)
@@ -266,6 +269,14 @@ static const struct kinetis_gpio_pin_config twr_k70f120m_gpio[] = {
 	/* F.27 = GLCD_D23 */
 	{{KINETIS_GPIO_PORT_F, 27}, KINETIS_GPIO_CONFIG_DSE(7)},
 #endif /* CONFIG_KINETIS_FB */
+	/* A.10 = LED_ORG */
+	{{KINETIS_GPIO_PORT_A, 10}, KINETIS_GPIO_CONFIG_MUX(1)},
+	/* A.28 = LED_YEL */
+	{{KINETIS_GPIO_PORT_A, 28}, KINETIS_GPIO_CONFIG_MUX(1)},
+	/* A.29 = LED_GRN */
+	{{KINETIS_GPIO_PORT_A, 29}, KINETIS_GPIO_CONFIG_MUX(1)},
+	/* A.11 = LED_RED */
+	{{KINETIS_GPIO_PORT_A, 11}, KINETIS_GPIO_CONFIG_MUX(1)},
 };
 
 /*
@@ -285,6 +296,7 @@ void __init kinetis_iomux_init(void)
 	platform = kinetis_platform_get();
 	switch (platform) {
 	case PLATFORM_KINETIS_TWR_K70F120M:
+		printk("kinetis_iomux_init: PLATFORM_KINETIS_TWR_K70F120M\n");
 		kinetis_gpio_config_table(
 			twr_k70f120m_gpio, ARRAY_SIZE(twr_k70f120m_gpio));
 		break;
