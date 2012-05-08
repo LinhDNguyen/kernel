@@ -74,12 +74,6 @@ typedef struct GPIO_MemMap {
    -- GPIO - Register accessor macros
    ---------------------------------------------------------------------------- */
 
-/**
- * @addtogroup GPIO_Register_Accessor_Macros GPIO - Register accessor macros
- * @{
- */
-
-
 /* GPIO - Register accessors */
 #define GPIO_PDOR_REG(base)                      ((base)->PDOR)
 #define GPIO_PSOR_REG(base)                      ((base)->PSOR)
@@ -88,19 +82,9 @@ typedef struct GPIO_MemMap {
 #define GPIO_PDIR_REG(base)                      ((base)->PDIR)
 #define GPIO_PDDR_REG(base)                      ((base)->PDDR)
 
-/**
- * @}
- */ /* end of group GPIO_Register_Accessor_Macros */
-
-
 /* ----------------------------------------------------------------------------
    -- GPIO Register Masks
    ---------------------------------------------------------------------------- */
-
-/**
- * @addtogroup GPIO_Register_Masks GPIO Register Masks
- * @{
- */
 
 /* PDOR Bit Fields */
 #define GPIO_PDOR_PDO_MASK                       0xFFFFFFFFu
@@ -127,11 +111,6 @@ typedef struct GPIO_MemMap {
 #define GPIO_PDDR_PDD_SHIFT                      0
 #define GPIO_PDDR_PDD(x)                         (((unsigned long)(((unsigned long)(x))<<GPIO_PDDR_PDD_SHIFT))&GPIO_PDDR_PDD_MASK)
 
-/**
- * @}
- */ /* end of group GPIO_Register_Masks */
-
-
 /* GPIO - Peripheral instance base addresses */
 /** Peripheral PTA base pointer */
 #define PTA_BASE_PTR                             ((GPIO_MemMapPtr)0x400FF000u)
@@ -149,12 +128,6 @@ typedef struct GPIO_MemMap {
 /* ----------------------------------------------------------------------------
    -- GPIO - Register accessor macros
    ---------------------------------------------------------------------------- */
-
-/**
- * @addtogroup GPIO_Register_Accessor_Macros GPIO - Register accessor macros
- * @{
- */
-
 
 /* GPIO - Register instance definitions */
 /* PTA */
