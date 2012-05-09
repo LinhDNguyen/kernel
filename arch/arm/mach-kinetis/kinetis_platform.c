@@ -39,6 +39,8 @@
 #include <mach/eth.h>
 #include <mach/nand.h>
 #include <mach/fb.h>
+#include <mach/gpio.h>
+
 
 /*
  * Prototypes
@@ -150,6 +152,11 @@ static void __init kinetis_init(void)
 	 * Configure the IOMUXes of the Freescale Kinetis MCU
 	 */
 	kinetis_iomux_init();
+
+	/*
+	* GPIO port clock enable
+	*/
+	kinetis_gpio_init();
 
 #if defined(CONFIG_SERIAL_KINETIS)
 	/*
