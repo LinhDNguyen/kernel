@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux kernel version: 2.6.33
-# Mon May  7 13:17:51 2012
+# Wed May  9 13:23:31 2012
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -245,6 +245,7 @@ CONFIG_KINETIS_UART2=y
 # CONFIG_KINETIS_UART4 is not set
 # CONFIG_KINETIS_UART5 is not set
 CONFIG_KINETIS_MAC=y
+CONFIG_KINETIS_LEDS_ENABLE=y
 
 #
 # Processor Type
@@ -759,6 +760,7 @@ CONFIG_SND_DRIVERS=y
 # CONFIG_SND_MPU401 is not set
 CONFIG_SND_ARM=y
 CONFIG_SND_SOC=y
+# CONFIG_SND_KINETIS_SOC is not set
 # CONFIG_SND_SOC_ALL_CODECS is not set
 # CONFIG_SOUND_PRIME is not set
 # CONFIG_HID_SUPPORT is not set
