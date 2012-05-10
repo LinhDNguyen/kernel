@@ -16,8 +16,8 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef _MXS_PCM_H
-#define _MXS_PCM_H
+#ifndef _KINETIS_PCM_H
+#define _KINETIS_PCM_H
 
 struct k70_pcm_dma_params {
 	char *name;

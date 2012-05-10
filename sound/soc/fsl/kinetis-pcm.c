@@ -28,12 +28,10 @@
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
 
-#include <mach/dma.h>
 #include <mach/hardware.h>
-#include <mach/dmaengine.h>
 
 #include "kinetis-pcm.h"
-static const struct snd_pcm_hardware mxs_pcm_hardware = {
+static const struct snd_pcm_hardware kinetis_pcm_hardware = {
 	.info			= SNDRV_PCM_INFO_MMAP |
 				  SNDRV_PCM_INFO_MMAP_VALID |
 				  SNDRV_PCM_INFO_PAUSE |
@@ -285,7 +283,7 @@ static int mxs_pcm_dma_request(struct snd_pcm_substream *substream)
 	struct k70_runtime_data *prtd = runtime->private_data;
 	struct k70_pcm_dma_params *dma_data =
 		snd_soc_dai_get_dma_data(rtd->dai->cpu_dai, substream);
-	int desc_num = mxs_pcm_hardware.periods_max;
+	int desc_num = kinetis_pcm_hardware.periods_max;
 	int desc;
 	int ret;
 
@@ -346,7 +344,7 @@ static int mxs_pcm_open(struct snd_pcm_substream *substream)
 	if (ret < 0)
 		return ret;
 
-	snd_soc_set_runtime_hwparams(substream, &mxs_pcm_hardware);
+	snd_soc_set_runtime_hwparams(substream, &kinetis_pcm_hardware);
 
 	prtd = kzalloc(sizeof(struct k70_runtime_data), GFP_KERNEL);
 	if (prtd == NULL)
@@ -367,7 +365,7 @@ static int mxs_pcm_close(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct k70_runtime_data *prtd = runtime->private_data;
-	int desc_num = mxs_pcm_hardware.periods_max;
+	int desc_num = kinetis_pcm_hardware.periods_max;
 	int desc;
 
 	static LIST_HEAD(list);
@@ -443,7 +441,7 @@ static u64 mxs_pcm_dma_mask = DMA_BIT_MASK(32);
 static int mxs_pcm_new(struct snd_card *card,
 			    struct snd_soc_dai *dai, struct snd_pcm *pcm)
 {
-	size_t size = mxs_pcm_hardware.buffer_bytes_max;
+	size_t size = kinetis_pcm_hardware.buffer_bytes_max;
 
 	if (!card->dev->dma_mask)
 		card->dev->dma_mask = &mxs_pcm_dma_mask;
@@ -478,7 +476,7 @@ static int mxs_pcm_remove(struct platform_device *pdev)
 }
 
 struct snd_soc_platform mxs_soc_platform = {
-	.name		= "MXS Audio",
+	.name		= "Kinetis Audio",
 	.pcm_ops	= &mxs_pcm_ops,
 	.probe		= mxs_pcm_probe,
 	.remove		= mxs_pcm_remove,
@@ -487,17 +485,17 @@ struct snd_soc_platform mxs_soc_platform = {
 };
 EXPORT_SYMBOL_GPL(mxs_soc_platform);
 
-static int __init mxs_pcm_init(void)
+static int __init kinetis_pcm_init(void)
 {
 	return snd_soc_register_platform(&mxs_soc_platform);
 }
 
-static void __exit mxs_pcm_exit(void)
+static void __exit kinetis_pcm_exit(void)
 {
 	snd_soc_unregister_platform(&mxs_soc_platform);
 }
-module_init(mxs_pcm_init);
-module_exit(mxs_pcm_exit);
+module_init(kinetis_pcm_init);
+module_exit(kinetis_pcm_exit);
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
 MODULE_DESCRIPTION("MXS DMA Module");
