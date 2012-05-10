@@ -190,7 +190,6 @@ void leds_exit(void) {
 }
 
 int leds_open(struct inode *inode, struct file *filp) {
-    static int counter = 0;
 
     leds_buf = inl(LED_PORT_REGION + LED_PDIR) & ALL_LED_MASK;
     sprintf(cur_buf, "Current LEDs status: \n    ORANGE: %s\n    YELLOW: %s\n    GREEN : %s\n    BLUE  : %s\n",
@@ -260,8 +259,6 @@ ssize_t leds_read(struct file *filp, char *buf, size_t count, loff_t *f_pos) {
 }
 
 ssize_t leds_write( struct file *filp, char *buf, size_t count, loff_t *f_pos) {
-
-    char *tmp;
     char tmp_buf[100] = {0};
     char cmd_buf[100] = {0};
     int len = count;
@@ -299,7 +296,6 @@ ssize_t leds_write( struct file *filp, char *buf, size_t count, loff_t *f_pos) {
             pos_p = strchr(cmd_buf, ' ');
             last = (unsigned int)pos_p - (unsigned int)cmd_buf;
             for(i=0; i<last; ++i){
-                int led = -1;
                 switch(cmd_buf[i]){
                     case '0':
                         printk("LED 0 - ORANGE is %s\n", is_on ? "ON" : "OFF");
