@@ -291,6 +291,11 @@ config TI_DAC7512
 
 	  This driver can also be built as a module. If so, the module
 	  will be calles ti_dac7512.
+config KINETIS_LEDS_CONTROL
+	tristate "FSL TWR K70F120M Leds controller."
+	depends on ARCH_KINETIS
+	help
+	  This is GPIO driver to control LEDs of Freescale TWR K70F120M
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"

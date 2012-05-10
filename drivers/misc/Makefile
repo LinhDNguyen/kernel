@@ -26,5 +26,6 @@ obj-$(CONFIG_DS1682)		+= ds1682.o
 obj-$(CONFIG_TI_DAC7512)	+= ti_dac7512.o
 obj-$(CONFIG_C2PORT)		+= c2port/
 obj-$(CONFIG_IWMC3200TOP)      += iwmc3200top/
+obj-$(CONFIG_KINETIS_LEDS_CONTROL)	+= leds.o
 obj-y				+= eeprom/
 obj-y				+= cb710/
