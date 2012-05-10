@@ -58,6 +58,17 @@ static int sgtl5000_set_bias_level(struct snd_soc_codec *codec,
 #define SGTL5000_MAX_CACHED_REG SGTL5000_CHIP_SHORT_CTRL
 static u16 sgtl5000_regs[(SGTL5000_MAX_CACHED_REG >> 1) + 1];
 
+static inline void snd_soc_codec_set_drvdata(struct snd_soc_codec *codec,
+					     void *data)
+{
+	codec->private_data = data;
+}
+
+static inline void *snd_soc_codec_get_drvdata(struct snd_soc_codec *codec)
+{
+	return codec->private_data;
+}
+
 /*
  * Schedule clock to be turned off or turn clock on.
  */
