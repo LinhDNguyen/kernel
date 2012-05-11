@@ -195,7 +195,7 @@ int leds_open(struct inode *inode, struct file *filp) {
     sprintf(cur_buf, "Current LEDs status: \n    ORANGE: %s\n    YELLOW: %s\n    GREEN : %s\n    BLUE  : %s\n",
             ((leds_buf & (1<<LED_ORA_IDX))  == 0 ? "ON" : "OFF"),
             ((leds_buf & (1<<LED_YEL_IDX))  == 0 ? "ON" : "OFF"),
-            ((leds_buf & (1<<LED_GRN_IDX))  == 0 ? "ON" : "OFF"),
+            ((leds_buf & (1<<LED_GRN_IDX))  == 0 ? "ON" : "OFF"),w
             ((leds_buf & (1<<LED_BLUE_IDX)) == 0 ? "ON" : "OFF")
     );
     /* Buffer to read the device */
@@ -269,7 +269,7 @@ ssize_t leds_write( struct file *filp, char *buf, size_t count, loff_t *f_pos) {
 
     /*Analyze command from input*/
     if(strlen(tmp_buf) <= 2){
-        printk("Usage: 0|1|2|3 on/off\n");
+        printk("[leds]Usage: 0|1|2|3 on/off\n");
     }else{
         char accept_char[] = "0123onf";
         int i = -1, first=-1, last=-1;
@@ -288,33 +288,33 @@ ssize_t leds_write( struct file *filp, char *buf, size_t count, loff_t *f_pos) {
         }
 
         if(first<0 || last<0 || (last - first)<=0){
-            printk("invalid command.\nUsage: 0|1|2|3 on/off\n");
+            printk("[leds]invalid command.\nUsage: 0|1|2|3 on/off\n");
         }else{
             memcpy(cmd_buf, &tmp_buf[first], last - first);
-            printk("cmd: [%s]\n", cmd_buf);
+            //printk("cmd: [%s]\n", cmd_buf);
             //find ' ' character
             pos_p = strchr(cmd_buf, ' ');
             last = (unsigned int)pos_p - (unsigned int)cmd_buf;
             for(i=0; i<last; ++i){
                 switch(cmd_buf[i]){
                     case '0':
-                        printk("LED 0 - ORANGE is %s\n", is_on ? "ON" : "OFF");
+                        //printk("LED 0 - ORANGE is %s\n", is_on ? "ON" : "OFF");
                         outl(0x00 | LED_ORA_M, (LED_PORT_REGION + (is_on ? LED_PCOR : LED_PSOR)));
                         break;
                     case '1':
-                        printk("LED 1 - YELLOW is %s\n", is_on ? "ON" : "OFF");
+                        //printk("LED 1 - YELLOW is %s\n", is_on ? "ON" : "OFF");
                         outl(0x00 | LED_YEL_M, (LED_PORT_REGION + (is_on ? LED_PCOR : LED_PSOR)));
                         break;
                     case '2':
-                        printk("LED 2 - GREEN is %s\n", is_on ? "ON" : "OFF");
+                        //printk("LED 2 - GREEN is %s\n", is_on ? "ON" : "OFF");
                         outl(0x00 | LED_GRN_M, (LED_PORT_REGION + (is_on ? LED_PCOR : LED_PSOR)));
                         break;
                     case '3':
-                        printk("LED 3 - BLUE is %s\n", is_on ? "ON" : "OFF");
+                        //printk("LED 3 - BLUE is %s\n", is_on ? "ON" : "OFF");
                         outl(0x00 | LED_BLUE_M, (LED_PORT_REGION + (is_on ? LED_PCOR : LED_PSOR)));
                         break;
                     default:
-                        printk("Invalid led number\n");
+                        printk("[leds]Invalid led number\n");
                         break;
                 }
             }
