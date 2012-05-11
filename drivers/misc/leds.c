@@ -195,7 +195,7 @@ int leds_open(struct inode *inode, struct file *filp) {
     sprintf(cur_buf, "Current LEDs status: \n    ORANGE: %s\n    YELLOW: %s\n    GREEN : %s\n    BLUE  : %s\n",
             ((leds_buf & (1<<LED_ORA_IDX))  == 0 ? "ON" : "OFF"),
             ((leds_buf & (1<<LED_YEL_IDX))  == 0 ? "ON" : "OFF"),
-            ((leds_buf & (1<<LED_GRN_IDX))  == 0 ? "ON" : "OFF"),w
+            ((leds_buf & (1<<LED_GRN_IDX))  == 0 ? "ON" : "OFF"),
             ((leds_buf & (1<<LED_BLUE_IDX)) == 0 ? "ON" : "OFF")
     );
     /* Buffer to read the device */
