@@ -45,6 +45,8 @@ struct request_sock_ops {
 	void		(*send_reset)(struct sock *sk,
 				      struct sk_buff *skb);
 	void		(*destructor)(struct request_sock *req);
+	void		(*syn_ack_timeout)(struct sock *sk,
+					   struct request_sock *req);
 };
 
 /* struct request_sock - mini sock to represent a connection request
@@ -94,7 +96,8 @@ extern int sysctl_max_syn_backlog;
  */
 struct listen_sock {
 	u8			max_qlen_log;
-	/* 3 bytes hole, try to use */
+	u8			synflood_warned;
+	/* 2 bytes hole, try to use */
 	int			qlen;
 	int			qlen_young;
 	int			clock_hand;

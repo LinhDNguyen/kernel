@@ -13,11 +13,11 @@
 *****************************************************************************/
 
 /* ---- Include Files ---------------------------------------------------- */
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/ioport.h>
 #include <linux/device.h>
@@ -52,9 +52,7 @@
 static const __devinitconst char gBanner[] = KERN_INFO \
 	"BCM UMI MTD NAND Driver: 1.00\n";
 
-#ifdef CONFIG_MTD_PARTITIONS
 const char *part_probes[] = { "cmdlinepart", NULL };
-#endif
 
 #if NAND_ECC_BCH
 static uint8_t scan_ff_pattern[] = { 0xff };
@@ -381,8 +379,8 @@ static int __devinit bcm_umi_nand_probe(struct platform_device *pdev)
 	if (!r)
 		return -ENXIO;
 
-	/* map physical adress */
-	bcm_umi_io_base = ioremap(r->start, r->end - r->start + 1);
+	/* map physical address */
+	bcm_umi_io_base = ioremap(r->start, resource_size(r));
 
 	if (!bcm_umi_io_base) {
 		printk(KERN_ERR "ioremap to access BCM UMI NAND chip failed\n");
@@ -446,7 +444,7 @@ static int __devinit bcm_umi_nand_probe(struct platform_device *pdev)
 	 * layout we'll be using.
 	 */
 
-	err = nand_scan_ident(board_mtd, 1);
+	err = nand_scan_ident(board_mtd, 1, NULL);
 	if (err) {
 		printk(KERN_ERR "nand_scan failed: %d\n", err);
 		iounmap(bcm_umi_io_base);
@@ -509,7 +507,7 @@ static int __devinit bcm_umi_nand_probe(struct platform_device *pdev)
 			kfree(board_mtd);
 			return -EIO;
 		}
-		add_mtd_partitions(board_mtd, partition_info, nr_partitions);
+		mtd_device_register(board_mtd, partition_info, nr_partitions);
 	}
 
 	/* Return happy */
@@ -525,7 +523,7 @@ static int bcm_umi_nand_remove(struct platform_device *pdev)
 	/* Release resources, unregister device */
 	nand_release(board_mtd);
 
-	/* unmap physical adress */
+	/* unmap physical address */
 	iounmap(bcm_umi_io_base);
 
 	/* Free the MTD device structure */

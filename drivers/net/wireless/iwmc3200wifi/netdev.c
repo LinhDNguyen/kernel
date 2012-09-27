@@ -46,6 +46,7 @@
  *              -> sdio_disable_func()
  */
 #include <linux/netdevice.h>
+#include <linux/slab.h>
 
 #include "iwm.h"
 #include "commands.h"
@@ -125,6 +126,7 @@ void *iwm_if_alloc(int sizeof_bus, struct device *dev,
 	ndev = alloc_netdev_mq(0, "wlan%d", ether_setup, IWM_TX_QUEUES);
 	if (!ndev) {
 		dev_err(dev, "no memory for network device instance\n");
+		ret = -ENOMEM;
 		goto out_priv;
 	}
 
@@ -137,6 +139,7 @@ void *iwm_if_alloc(int sizeof_bus, struct device *dev,
 				    GFP_KERNEL);
 	if (!iwm->umac_profile) {
 		dev_err(dev, "Couldn't alloc memory for profile\n");
+		ret = -ENOMEM;
 		goto out_profile;
 	}
 

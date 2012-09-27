@@ -18,7 +18,6 @@
 #include <asm/domain.h>
 #include <asm/system.h>
 #include <asm/unified.h>
-#include <asm/mpu.h>
 
 #define VERIFY_READ 0
 #define VERIFY_WRITE 1
@@ -169,8 +168,6 @@ extern int __put_user_8(void *, unsigned long long);
 
 #else /* CONFIG_MMU */
 
-#ifndef CONFIG_MPU_USER_ACCESS
-
 /*
  * uClinux has only one addr space, so has simplified address limits.
  */
@@ -184,28 +181,6 @@ extern int __put_user_8(void *, unsigned long long);
 static inline void set_fs(mm_segment_t fs)
 {
 }
-
-/*
- * If CONFIG_MPU_USER_ACCESS is enabled, the no-MMU linux provides protection
- * of user protection, including access_ok and friends
- */
-#else
-
-#define USER_DS		TASK_SIZE
-#define get_fs()	(current_thread_info()->addr_limit)
-
-static inline void set_fs(mm_segment_t fs)
-{
-	current_thread_info()->addr_limit = fs;
-	modify_domain(DOMAIN_KERNEL, fs ? DOMAIN_CLIENT : DOMAIN_MANAGER);
-}
-
-#define segment_eq(a,b)	(1)
-
-#define __addr_ok(addr)		(get_fs()==KERNEL_DS ? 1 : mpu_addr_ok(addr))
-#define __range_ok(addr,size)	(! __addr_ok(addr))
-
-#endif /* CONFIG_MPU_USER_ACCESS */
 
 #define get_user(x,p)	__get_user(x,p)
 #define put_user(x,p)	__put_user(x,p)
@@ -254,16 +229,16 @@ do {									\
 	__asm__ __volatile__(					\
 	"1:	" T(ldrb) "	%1,[%2],#0\n"			\
 	"2:\n"							\
-	"	.section .fixup,\"ax\"\n"			\
+	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
 	"3:	mov	%0, %3\n"				\
 	"	mov	%1, #0\n"				\
 	"	b	2b\n"					\
-	"	.previous\n"					\
-	"	.section __ex_table,\"a\"\n"			\
+	"	.popsection\n"					\
+	"	.pushsection __ex_table,\"a\"\n"		\
 	"	.align	3\n"					\
 	"	.long	1b, 3b\n"				\
-	"	.previous"					\
+	"	.popsection"					\
 	: "+r" (err), "=&r" (x)					\
 	: "r" (addr), "i" (-EFAULT)				\
 	: "cc")
@@ -290,16 +265,16 @@ do {									\
 	__asm__ __volatile__(					\
 	"1:	" T(ldr) "	%1,[%2],#0\n"			\
 	"2:\n"							\
-	"	.section .fixup,\"ax\"\n"			\
+	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
 	"3:	mov	%0, %3\n"				\
 	"	mov	%1, #0\n"				\
 	"	b	2b\n"					\
-	"	.previous\n"					\
-	"	.section __ex_table,\"a\"\n"			\
+	"	.popsection\n"					\
+	"	.pushsection __ex_table,\"a\"\n"		\
 	"	.align	3\n"					\
 	"	.long	1b, 3b\n"				\
-	"	.previous"					\
+	"	.popsection"					\
 	: "+r" (err), "=&r" (x)					\
 	: "r" (addr), "i" (-EFAULT)				\
 	: "cc")
@@ -335,15 +310,15 @@ do {									\
 	__asm__ __volatile__(					\
 	"1:	" T(strb) "	%1,[%2],#0\n"			\
 	"2:\n"							\
-	"	.section .fixup,\"ax\"\n"			\
+	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
 	"3:	mov	%0, %3\n"				\
 	"	b	2b\n"					\
-	"	.previous\n"					\
-	"	.section __ex_table,\"a\"\n"			\
+	"	.popsection\n"					\
+	"	.pushsection __ex_table,\"a\"\n"		\
 	"	.align	3\n"					\
 	"	.long	1b, 3b\n"				\
-	"	.previous"					\
+	"	.popsection"					\
 	: "+r" (err)						\
 	: "r" (x), "r" (__pu_addr), "i" (-EFAULT)		\
 	: "cc")
@@ -368,15 +343,15 @@ do {									\
 	__asm__ __volatile__(					\
 	"1:	" T(str) "	%1,[%2],#0\n"			\
 	"2:\n"							\
-	"	.section .fixup,\"ax\"\n"			\
+	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
 	"3:	mov	%0, %3\n"				\
 	"	b	2b\n"					\
-	"	.previous\n"					\
-	"	.section __ex_table,\"a\"\n"			\
+	"	.popsection\n"					\
+	"	.pushsection __ex_table,\"a\"\n"		\
 	"	.align	3\n"					\
 	"	.long	1b, 3b\n"				\
-	"	.previous"					\
+	"	.popsection"					\
 	: "+r" (err)						\
 	: "r" (x), "r" (__pu_addr), "i" (-EFAULT)		\
 	: "cc")
@@ -396,16 +371,16 @@ do {									\
  THUMB(	"1:	" T(str) "	" __reg_oper1 ", [%1]\n"	)	\
  THUMB(	"2:	" T(str) "	" __reg_oper0 ", [%1, #4]\n"	)	\
 	"3:\n"							\
-	"	.section .fixup,\"ax\"\n"			\
+	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
 	"4:	mov	%0, %3\n"				\
 	"	b	3b\n"					\
-	"	.previous\n"					\
-	"	.section __ex_table,\"a\"\n"			\
+	"	.popsection\n"					\
+	"	.pushsection __ex_table,\"a\"\n"		\
 	"	.align	3\n"					\
 	"	.long	1b, 4b\n"				\
 	"	.long	2b, 4b\n"				\
-	"	.previous"					\
+	"	.popsection"					\
 	: "+r" (err), "+r" (__pu_addr)				\
 	: "r" (x), "i" (-EFAULT)				\
 	: "cc")

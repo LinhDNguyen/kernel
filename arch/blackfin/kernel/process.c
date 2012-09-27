@@ -7,10 +7,10 @@
  */
 
 #include <linux/module.h>
-#include <linux/smp_lock.h>
 #include <linux/unistd.h>
 #include <linux/user.h>
 #include <linux/uaccess.h>
+#include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/tick.h>
 #include <linux/fs.h>
@@ -64,11 +64,11 @@ static void default_idle(void)
 #ifdef CONFIG_IPIPE
 	ipipe_suspend_domain();
 #endif
-	local_irq_disable_hw();
+	hard_local_irq_disable();
 	if (!need_resched())
 		idle_with_irq_disabled();
 
-	local_irq_enable_hw();
+	hard_local_irq_enable();
 }
 
 /*
@@ -96,13 +96,6 @@ void cpu_idle(void)
 		schedule();
 		preempt_disable();
 	}
-}
-
-/* Fill in the fpu structure for a core dump.  */
-
-int dump_fpu(struct pt_regs *regs, elf_fpregset_t * fpregs)
-{
-	return 1;
 }
 
 /*
@@ -147,7 +140,6 @@ EXPORT_SYMBOL(kernel_thread);
  */
 void start_thread(struct pt_regs *regs, unsigned long new_ip, unsigned long new_sp)
 {
-	set_fs(USER_DS);
 	regs->pc = new_ip;
 	if (current->mm)
 		regs->p5 = current->mm->start_data;
@@ -178,10 +170,8 @@ asmlinkage int bfin_clone(struct pt_regs *regs)
 	unsigned long newsp;
 
 #ifdef __ARCH_SYNC_CORE_DCACHE
-	if (current->rt.nr_cpus_allowed == num_possible_cpus()) {
-		current->cpus_allowed = cpumask_of_cpu(smp_processor_id());
-		current->rt.nr_cpus_allowed = 1;
-	}
+	if (current->rt.nr_cpus_allowed == num_possible_cpus())
+		set_cpus_allowed_ptr(current, cpumask_of(smp_processor_id()));
 #endif
 
 	/* syscall2 puts clone_flags in r0 and usp in r1 */
@@ -215,7 +205,9 @@ copy_thread(unsigned long clone_flags,
 /*
  * sys_execve() executes a new program.
  */
-asmlinkage int sys_execve(char __user *name, char __user * __user *argv, char __user * __user *envp)
+asmlinkage int sys_execve(const char __user *name,
+			  const char __user *const __user *argv,
+			  const char __user *const __user *envp)
 {
 	int error;
 	char *filename;
@@ -494,6 +486,11 @@ int _access_ok(unsigned long addr, unsigned long size)
 	if (in_mem_const(addr, size, COREB_L1_DATA_A_START, COREB_L1_DATA_A_LENGTH))
 		return 1;
 	if (in_mem_const(addr, size, COREB_L1_DATA_B_START, COREB_L1_DATA_B_LENGTH))
+		return 1;
+#endif
+
+#ifndef CONFIG_EXCEPTION_L1_SCRATCH
+	if (in_mem_const(addr, size, (unsigned long)l1_stack_base, l1_stack_len))
 		return 1;
 #endif
 

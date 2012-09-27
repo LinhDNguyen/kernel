@@ -13,6 +13,9 @@
  *  Do not include any C declarations in this file - it is included by
  *  assembler source.
  */
+#ifndef __ASM_ASSEMBLER_H__
+#define __ASM_ASSEMBLER_H__
+
 #ifndef __ASSEMBLY__
 #error "Only include this from assembly code"
 #endif
@@ -130,11 +133,7 @@
  * assumes FIQs are enabled, and that the processor is in SVC mode.
  */
 	.macro	save_and_disable_irqs, oldcpsr
-#ifdef CONFIG_CPU_V7M
-	mrs	\oldcpsr, primask
-#else
 	mrs	\oldcpsr, cpsr
-#endif
 	disable_irq
 	.endm
 
@@ -143,11 +142,7 @@
  * guarantee that this will preserve the flags.
  */
 	.macro	restore_irqs_notrace, oldcpsr
-#ifdef CONFIG_CPU_V7M
-	msr	primask, \oldcpsr
-#else
 	msr	cpsr_c, \oldcpsr
-#endif
 	.endm
 
 	.macro restore_irqs, oldcpsr
@@ -158,28 +153,64 @@
 
 #define USER(x...)				\
 9999:	x;					\
-	.section __ex_table,"a";		\
+	.pushsection __ex_table,"a";		\
 	.align	3;				\
 	.long	9999b,9001f;			\
-	.previous
+	.popsection
+
+#ifdef CONFIG_SMP
+#define ALT_SMP(instr...)					\
+9998:	instr
+/*
+ * Note: if you get assembler errors from ALT_UP() when building with
+ * CONFIG_THUMB2_KERNEL, you almost certainly need to use
+ * ALT_SMP( W(instr) ... )
+ */
+#define ALT_UP(instr...)					\
+	.pushsection ".alt.smp.init", "a"			;\
+	.long	9998b						;\
+9997:	instr							;\
+	.if . - 9997b != 4					;\
+		.error "ALT_UP() content must assemble to exactly 4 bytes";\
+	.endif							;\
+	.popsection
+#define ALT_UP_B(label)					\
+	.equ	up_b_offset, label - 9998b			;\
+	.pushsection ".alt.smp.init", "a"			;\
+	.long	9998b						;\
+	W(b)	. + up_b_offset					;\
+	.popsection
+#else
+#define ALT_SMP(instr...)
+#define ALT_UP(instr...) instr
+#define ALT_UP_B(label) b label
+#endif
 
 /*
  * SMP data memory barrier
  */
-	.macro	smp_dmb
+	.macro	smp_dmb mode
 #ifdef CONFIG_SMP
 #if __LINUX_ARM_ARCH__ >= 7
-	dmb
+	.ifeqs "\mode","arm"
+	ALT_SMP(dmb)
+	.else
+	ALT_SMP(W(dmb))
+	.endif
 #elif __LINUX_ARM_ARCH__ == 6
-	mcr	p15, 0, r0, c7, c10, 5	@ dmb
+	ALT_SMP(mcr	p15, 0, r0, c7, c10, 5)	@ dmb
+#else
+#error Incompatible SMP platform
 #endif
+	.ifeqs "\mode","arm"
+	ALT_UP(nop)
+	.else
+	ALT_UP(W(nop))
+	.endif
 #endif
 	.endm
 
-#if defined(CONFIG_CPU_V7M)
-	.macro	setmode, mode, reg
-	.endm
-#elif defined(CONFIG_THUMB2_KERNEL)
+#ifdef CONFIG_THUMB2_KERNEL
 	.macro	setmode, mode, reg
 	mov	\reg, #\mode
 	msr	cpsr_c, \reg
@@ -205,10 +236,10 @@
 	.error	"Unsupported inc macro argument"
 	.endif
 
-	.section __ex_table,"a"
+	.pushsection __ex_table,"a"
 	.align	3
 	.long	9999b, \abort
-	.previous
+	.popsection
 	.endm
 
 	.macro	usracc, instr, reg, ptr, inc, cond, rept, abort
@@ -227,7 +258,7 @@
 	@ Slightly optimised to avoid incrementing the pointer twice
 	usraccoff \instr, \reg, \ptr, \inc, 0, \cond, \abort
 	.if	\rept == 2
-	usraccoff \instr, \reg, \ptr, \inc, 4, \cond, \abort
+	usraccoff \instr, \reg, \ptr, \inc, \inc, \cond, \abort
 	.endif
 
 	add\cond \ptr, #\rept * \inc
@@ -246,10 +277,10 @@
 	.error	"Unsupported inc macro argument"
 	.endif
 
-	.section __ex_table,"a"
+	.pushsection __ex_table,"a"
 	.align	3
 	.long	9999b, \abort
-	.previous
+	.popsection
 	.endr
 	.endm
 
@@ -262,3 +293,13 @@
 	.macro	ldrusr, reg, ptr, inc, cond=al, rept=1, abort=9001f
 	usracc	ldr, \reg, \ptr, \inc, \cond, \rept, \abort
 	.endm
+
+/* Utility macro for declaring string literals */
+	.macro	string name:req, string
+	.type \name , #object
+\name:
+	.asciz "\string"
+	.size \name , . - \name
+	.endm
+
+#endif /* __ASM_ASSEMBLER_H__ */

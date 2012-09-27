@@ -8,6 +8,8 @@
  * Copyright (C) 1995, 1996 Olaf Kirch <okir@monad.swb.de>
  */
 
+#include <linux/slab.h>
+
 #include "nfsd.h"
 #include "cache.h"
 
@@ -116,7 +118,7 @@ hash_refile(struct svc_cacherep *rp)
  * Note that no operation within the loop may sleep.
  */
 int
-nfsd_cache_lookup(struct svc_rqst *rqstp, int type)
+nfsd_cache_lookup(struct svc_rqst *rqstp)
 {
 	struct hlist_node	*hn;
 	struct hlist_head 	*rh;
@@ -126,6 +128,7 @@ nfsd_cache_lookup(struct svc_rqst *rqstp, int type)
 				vers = rqstp->rq_vers,
 				proc = rqstp->rq_proc;
 	unsigned long		age;
+	int type = rqstp->rq_cachetype;
 	int rtn;
 
 	rqstp->rq_cacherep = NULL;

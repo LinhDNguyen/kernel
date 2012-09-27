@@ -40,10 +40,14 @@ void radeon_test_moves(struct radeon_device *rdev)
 	size = 1024 * 1024;
 
 	/* Number of tests =
-	 * (Total GTT - IB pool - writeback page - ring buffer) / test size
+	 * (Total GTT - IB pool - writeback page - ring buffers) / test size
 	 */
-	n = ((u32)(rdev->mc.gtt_size - RADEON_IB_POOL_SIZE*64*1024 - RADEON_GPU_PAGE_SIZE -
-	     rdev->cp.ring_size)) / size;
+	n = rdev->mc.gtt_size - RADEON_IB_POOL_SIZE*64*1024 - rdev->cp.ring_size;
+	if (rdev->wb.wb_obj)
+		n -= RADEON_GPU_PAGE_SIZE;
+	if (rdev->ih.ring_obj)
+		n -= rdev->ih.ring_size;
+	n /= size;
 
 	gtt_obj = kzalloc(n * sizeof(*gtt_obj), GFP_KERNEL);
 	if (!gtt_obj) {
@@ -52,7 +56,7 @@ void radeon_test_moves(struct radeon_device *rdev)
 		goto out_cleanup;
 	}
 
-	r = radeon_bo_create(rdev, NULL, size, true, RADEON_GEM_DOMAIN_VRAM,
+	r = radeon_bo_create(rdev, size, PAGE_SIZE, true, RADEON_GEM_DOMAIN_VRAM,
 				&vram_obj);
 	if (r) {
 		DRM_ERROR("Failed to create VRAM object\n");
@@ -71,7 +75,7 @@ void radeon_test_moves(struct radeon_device *rdev)
 		void **gtt_start, **gtt_end;
 		void **vram_start, **vram_end;
 
-		r = radeon_bo_create(rdev, NULL, size, true,
+		r = radeon_bo_create(rdev, size, PAGE_SIZE, true,
 					 RADEON_GEM_DOMAIN_GTT, gtt_obj + i);
 		if (r) {
 			DRM_ERROR("Failed to create GTT object %d\n", i);
@@ -132,9 +136,15 @@ void radeon_test_moves(struct radeon_device *rdev)
 		     gtt_start++, vram_start++) {
 			if (*vram_start != gtt_start) {
 				DRM_ERROR("Incorrect GTT->VRAM copy %d: Got 0x%p, "
-					  "expected 0x%p (GTT map 0x%p-0x%p)\n",
-					  i, *vram_start, gtt_start, gtt_map,
-					  gtt_end);
+					  "expected 0x%p (GTT/VRAM offset "
+					  "0x%16llx/0x%16llx)\n",
+					  i, *vram_start, gtt_start,
+					  (unsigned long long)
+					  (gtt_addr - rdev->mc.gtt_start +
+					   (void*)gtt_start - gtt_map),
+					  (unsigned long long)
+					  (vram_addr - rdev->mc.vram_start +
+					   (void*)gtt_start - gtt_map));
 				radeon_bo_kunmap(vram_obj);
 				goto out_cleanup;
 			}
@@ -175,9 +185,15 @@ void radeon_test_moves(struct radeon_device *rdev)
 		     gtt_start++, vram_start++) {
 			if (*gtt_start != vram_start) {
 				DRM_ERROR("Incorrect VRAM->GTT copy %d: Got 0x%p, "
-					  "expected 0x%p (VRAM map 0x%p-0x%p)\n",
-					  i, *gtt_start, vram_start, vram_map,
-					  vram_end);
+					  "expected 0x%p (VRAM/GTT offset "
+					  "0x%16llx/0x%16llx)\n",
+					  i, *gtt_start, vram_start,
+					  (unsigned long long)
+					  (vram_addr - rdev->mc.vram_start +
+					   (void*)vram_start - vram_map),
+					  (unsigned long long)
+					  (gtt_addr - rdev->mc.gtt_start +
+					   (void*)vram_start - vram_map));
 				radeon_bo_kunmap(gtt_obj[i]);
 				goto out_cleanup;
 			}
@@ -186,7 +202,7 @@ void radeon_test_moves(struct radeon_device *rdev)
 		radeon_bo_kunmap(gtt_obj[i]);
 
 		DRM_INFO("Tested GTT->VRAM and VRAM->GTT copy for GTT offset 0x%llx\n",
-			 gtt_addr - rdev->mc.gtt_location);
+			 gtt_addr - rdev->mc.gtt_start);
 	}
 
 out_cleanup:

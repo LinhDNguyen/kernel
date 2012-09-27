@@ -1,21 +1,15 @@
 /*
  * sgtl5000.h - SGTL5000 audio codec interface
  *
- * Copyright (C) 2008-2010 Freescale Semiconductor, Inc.
+ * Copyright 2010-2011 Freescale Semiconductor, Inc.
  *
- *  This program is free software; you can redistribute  it and/or modify it
- *  under  the terms of  the GNU General  Public License as published by the
- *  Free Software Foundation;  either version 2 of the  License, or (at your
- *  option) any later version.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  */
 
 #ifndef _SGTL5000_H
 #define _SGTL5000_H
-
-#include <linux/i2c.h>
-
-extern struct snd_soc_dai sgtl5000_dai;
-extern struct snd_soc_codec_device soc_codec_dev_sgtl5000;
 
 /*
  * Register values.
@@ -81,7 +75,7 @@ extern struct snd_soc_codec_device soc_codec_dev_sgtl5000;
 #define SGTL5000_PARTID_MASK			0xff00
 #define SGTL5000_PARTID_SHIFT			8
 #define SGTL5000_PARTID_WIDTH			8
-#define SGTL5000_PARTID_PART_ID		0xa0
+#define SGTL5000_PARTID_PART_ID			0xa0
 #define SGTL5000_REVID_MASK			0x00ff
 #define SGTL5000_REVID_SHIFT			0
 #define SGTL5000_REVID_WIDTH			8
@@ -241,7 +235,7 @@ extern struct snd_soc_codec_device soc_codec_dev_sgtl5000;
 /*
  * SGTL5000_CHIP_ANA_CTRL
  */
-#define SGTL5000_LINE_OUT_MUTE		0x0100
+#define SGTL5000_LINE_OUT_MUTE			0x0100
 #define SGTL5000_HP_SEL_MASK			0x0040
 #define SGTL5000_HP_SEL_SHIFT			6
 #define SGTL5000_HP_SEL_WIDTH			1
@@ -400,11 +394,7 @@ extern struct snd_soc_codec_device soc_codec_dev_sgtl5000;
 #define SGTL5000_DAP_MIX_EN			0x0010
 #define SGTL5000_DAP_EN				0x0001
 
-#define SGTL5000_SYSCLK		0x00
-#define SGTL5000_LRCLK		0x01
-
-struct sgtl5000_setup_data {
-	int (*clock_enable) (int enable);
-};
+#define SGTL5000_SYSCLK				0x00
+#define SGTL5000_LRCLK				0x01
 
 #endif

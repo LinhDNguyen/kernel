@@ -673,7 +673,8 @@ static void configure_nonsound_components(void)
 
 	if (pss_cdrom_port == -1) {	/* If cdrom port enablation wasn't requested */
 		printk(KERN_INFO "PSS: CDROM port not enabled.\n");
-	} else if (check_region(pss_cdrom_port, 2)) {
+	} else if (!request_region(pss_cdrom_port, 2, "PSS CDROM")) {
+		pss_cdrom_port = -1;
 		printk(KERN_ERR "PSS: CDROM I/O port conflict.\n");
 	} else {
 		set_io_base(devc, CONF_CDROM, pss_cdrom_port);
@@ -859,7 +860,7 @@ static int pss_coproc_ioctl(void *dev_info, unsigned int cmd, void __user *arg, 
 			return 0;
 
 		case SNDCTL_COPR_LOAD:
-			buf = (copr_buffer *) vmalloc(sizeof(copr_buffer));
+			buf = vmalloc(sizeof(copr_buffer));
 			if (buf == NULL)
 				return -ENOSPC;
 			if (copy_from_user(buf, arg, sizeof(copr_buffer))) {
@@ -871,7 +872,7 @@ static int pss_coproc_ioctl(void *dev_info, unsigned int cmd, void __user *arg, 
 			return err;
 		
 		case SNDCTL_COPR_SENDMSG:
-			mbuf = (copr_msg *)vmalloc(sizeof(copr_msg));
+			mbuf = vmalloc(sizeof(copr_msg));
 			if (mbuf == NULL)
 				return -ENOSPC;
 			if (copy_from_user(mbuf, arg, sizeof(copr_msg))) {
@@ -895,7 +896,7 @@ static int pss_coproc_ioctl(void *dev_info, unsigned int cmd, void __user *arg, 
 
 		case SNDCTL_COPR_RCVMSG:
 			err = 0;
-			mbuf = (copr_msg *)vmalloc(sizeof(copr_msg));
+			mbuf = vmalloc(sizeof(copr_msg));
 			if (mbuf == NULL)
 				return -ENOSPC;
 			data = (unsigned short *)mbuf->data;
@@ -1232,7 +1233,8 @@ static void __exit cleanup_pss(void)
 		if(pssmpu)
 			unload_pss_mpu(&cfg_mpu);
 		unload_pss(&cfg);
-	}
+	} else if (pss_cdrom_port != -1)
+		release_region(pss_cdrom_port, 2);
 
 	if(!pss_keep_settings)	/* Keep hardware settings if asked */
 	{

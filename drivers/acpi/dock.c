@@ -24,6 +24,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/notifier.h>
@@ -76,7 +77,7 @@ struct dock_dependent_device {
 	struct list_head list;
 	struct list_head hotplug_list;
 	acpi_handle handle;
-	struct acpi_dock_ops *ops;
+	const struct acpi_dock_ops *ops;
 	void *context;
 };
 
@@ -588,7 +589,7 @@ EXPORT_SYMBOL_GPL(unregister_dock_notifier);
  * the dock driver after _DCK is executed.
  */
 int
-register_hotplug_dock_device(acpi_handle handle, struct acpi_dock_ops *ops,
+register_hotplug_dock_device(acpi_handle handle, const struct acpi_dock_ops *ops,
 			     void *context)
 {
 	struct dock_dependent_device *dd;
@@ -605,7 +606,7 @@ register_hotplug_dock_device(acpi_handle handle, struct acpi_dock_ops *ops,
 	list_for_each_entry(dock_station, &dock_stations, sibling) {
 		/*
 		 * An ATA bay can be in a dock and itself can be ejected
-		 * seperately, so there are two 'dock stations' which need the
+		 * separately, so there are two 'dock stations' which need the
 		 * ops
 		 */
 		dd = find_dock_dependent_device(dock_station, handle);
@@ -724,6 +725,7 @@ static void dock_notify(acpi_handle handle, u32 event, void *data)
 			complete_dock(ds);
 			dock_event(ds, event, DOCK_EVENT);
 			dock_lock(ds, 1);
+			acpi_update_all_gpes();
 			break;
 		}
 		if (dock_present(ds) || dock_in_progress(ds))
@@ -928,7 +930,7 @@ static struct attribute_group dock_attribute_group = {
  * allocated and initialize a new dock station device.  Find all devices
  * that are on the dock station, and register for dock event notifications.
  */
-static int dock_add(acpi_handle handle)
+static int __init dock_add(acpi_handle handle)
 {
 	int ret, id;
 	struct dock_station ds, *dock_station;
@@ -1022,19 +1024,16 @@ static int dock_remove(struct dock_station *ds)
  *
  * This is called by acpi_walk_namespace to look for dock stations.
  */
-static acpi_status
+static __init acpi_status
 find_dock(acpi_handle handle, u32 lvl, void *context, void **rv)
 {
-	acpi_status status = AE_OK;
-
 	if (is_dock(handle))
-		if (dock_add(handle) >= 0)
-			status = AE_CTRL_TERMINATE;
+		dock_add(handle);
 
-	return status;
+	return AE_OK;
 }
 
-static acpi_status
+static __init acpi_status
 find_bay(acpi_handle handle, u32 lvl, void *context, void **rv)
 {
 	/* If bay is a dock, it's already handled */

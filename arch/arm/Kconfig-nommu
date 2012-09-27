@@ -11,7 +11,6 @@ config SET_MEM_PARAM
 
 config DRAM_BASE
 	hex '(S)DRAM Base Address' if SET_MEM_PARAM
-	depends on !ARCH_A2F
 	default 0x00800000
 
 config DRAM_SIZE
@@ -29,13 +28,13 @@ config FLASH_SIZE
 config PROCESSOR_ID
 	hex 'Hard wire the processor ID'
 	default 0x00007700
-	depends on !(CPU_CP15 || CPU_V7M)
+	depends on !CPU_CP15
 	help
 	  If processor has no CP15 register, this processor ID is
 	  used instead of the auto-probing which utilizes the register.
 
 config REMAP_VECTORS_TO_RAM
-	bool 'Install vectors to the begining of RAM' if DRAM_BASE
+	bool 'Install vectors to the beginning of RAM' if DRAM_BASE
 	depends on DRAM_BASE
 	help
 	  The kernel needs to change the hardware exception vectors.

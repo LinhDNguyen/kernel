@@ -20,12 +20,12 @@
  */
 
 #include <linux/module.h>
-#include <linux/version.h>
 #include <linux/input.h>
 #include <linux/ctype.h>
 #include <linux/libps2.h>
 #include <linux/serio.h>
 #include <linux/jiffies.h>
+#include <linux/slab.h>
 
 #include "psmouse.h"
 #include "sentelic.h"

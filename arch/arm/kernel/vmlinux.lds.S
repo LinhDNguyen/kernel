@@ -8,6 +8,27 @@
 #include <asm/memory.h>
 #include <asm/page.h>
 	
+#define PROC_INFO							\
+	VMLINUX_SYMBOL(__proc_info_begin) = .;				\
+	*(.proc.info.init)						\
+	VMLINUX_SYMBOL(__proc_info_end) = .;
+
+#ifdef CONFIG_HOTPLUG_CPU
+#define ARM_CPU_DISCARD(x)
+#define ARM_CPU_KEEP(x)		x
+#else
+#define ARM_CPU_DISCARD(x)	x
+#define ARM_CPU_KEEP(x)
+#endif
+
+#if defined(CONFIG_SMP_ON_UP) && !defined(CONFIG_DEBUG_SPINLOCK)
+#define ARM_EXIT_KEEP(x)	x
+#define ARM_EXIT_DISCARD(x)
+#else
+#define ARM_EXIT_KEEP(x)
+#define ARM_EXIT_DISCARD(x)	x
+#endif
+
 OUTPUT_ARCH(arm)
 ENTRY(stext)
 
@@ -19,81 +40,23 @@ jiffies = jiffies_64 + 4;
 
 SECTIONS
 {
-
-#ifdef CONFIG_XIP_KERNEL
-	. = XIP_VIRT_ADDR(CONFIG_XIP_PHYS_ADDR);
-#else
-#if defined(PHYS_ALIAS_OFFSET)
-	. = PHYS_ALIAS_OFFSET + TEXT_OFFSET;
-#else
-	. = PAGE_OFFSET + TEXT_OFFSET;
-#endif
-#endif
-
-	.init : {			/* Init code and data		*/
-		_stext = .;
-		_sinittext = .;
-			HEAD_TEXT
-			INIT_TEXT
-		_einittext = .;
-#if !defined(CONFIG_INITRAMFS_IS_LARGE)
-		/*
-		 * In case the kernel links in a built-in initramfs
-		 * and that initramfs is large enough, there is a symbol
-		 * in .proc.info.init that makes a relative reference
-		 * (in an assembly-level file) to a symbol in the kernel text.
-		 * The initramfs being large, that relative reference 
-		 * doesn't work because the linker is not able to fit
-		 * in the relative offset into the 24 bit offset field.
-		 * The solution (well, part of it) is to move .proc.info.init
-		 * closer to the kernel text section.
-		 */
-		__proc_info_begin = .;
-			*(.proc.info.init)
-		__proc_info_end = .;
-#endif
-		__arch_info_begin = .;
-			*(.arch.info.init)
-		__arch_info_end = .;
-		__tagtable_begin = .;
-			*(.taglist.init)
-		__tagtable_end = .;
-
-		INIT_SETUP(16)
-
-		__early_begin = .;
-			*(.early_param.init)
-		__early_end = .;
-
-		INIT_CALLS
-		CON_INITCALL
-		SECURITY_INITCALL
-		INIT_RAM_FS
-
-#ifndef CONFIG_XIP_KERNEL
-		__init_begin = _stext;
-		INIT_DATA
-#endif
-	} 
-
-	PERCPU(PAGE_SIZE)
-
-#ifndef CONFIG_XIP_KERNEL
-	. = ALIGN(PAGE_SIZE);
-	__init_end = .;
-#endif
-
 	/*
+	 * XXX: The linker does not define how output sections are
+	 * assigned to input sections when there are multiple statements
+	 * matching the same input section name.  There is no documented
+	 * order of matching.
+	 *
 	 * unwind exit sections must be discarded before the rest of the
 	 * unwind sections get included.
 	 */
 	/DISCARD/ : {
 		*(.ARM.exidx.exit.text)
 		*(.ARM.extab.exit.text)
-#ifndef CONFIG_HOTPLUG_CPU
-		*(.ARM.exidx.cpuexit.text)
-		*(.ARM.extab.cpuexit.text)
-#endif
+		ARM_CPU_DISCARD(*(.ARM.exidx.cpuexit.text))
+		ARM_CPU_DISCARD(*(.ARM.extab.cpuexit.text))
+		ARM_EXIT_DISCARD(EXIT_TEXT)
+		ARM_EXIT_DISCARD(EXIT_DATA)
+		EXIT_CALL
 #ifndef CONFIG_HOTPLUG
 		*(.ARM.exidx.devexit.text)
 		*(.ARM.extab.devexit.text)
@@ -102,90 +65,28 @@ SECTIONS
 		*(.fixup)
 		*(__ex_table)
 #endif
+#ifndef CONFIG_SMP_ON_UP
+		*(.alt.smp.init)
+#endif
+		*(.discard)
+		*(.discard.*)
 	}
 
-/*
- * In case we run parts of the kernel in embedded Flash,
- * relocate critical kernel code to that fast Flash.
- */
-#ifdef CONFIG_KERNEL_IN_ENVM
-	_envm_loc = .;
-
-
-	.envm  ENVM_PHYS_OFFSET + CONFIG_KERNEL_IN_ENVM_OFFSET * 1024 : {
-		_envm_start = .;
-
-#if CONFIG_KERNEL_IN_ENVM_SIZE>0
-		__exception_text_start = .;
-		*(.exception.text*)
-		*(.exception.rodata*)
-		__exception_text_end = .;
-		SCHED_TEXT
-		LOCK_TEXT
-		KPROBES_TEXT
-
-		usr/built-in.o(.text)
-		usr/built-in.o(.rodata*)
-		init/built-in.o(.text)
-		init/built-in.o(.rodata*)
-		mm/built-in.o(.text)
-		mm/built-in.o(.rodata*)
-		arch/arm/mm/built-in.o(.text)
-		arch/arm/mm/built-in.o(.rodata*)
-		arch/arm/common/built-in.o(.text)
-		arch/arm/common/built-in.o(.rodata*)
-
-		arch/arm/lib/lib.a(.text)
-		arch/arm/lib/lib.a(.rodata*)
-		arch/arm/lib/built-in.o(.text)
-		arch/arm/lib/built-in.o(.rodata*)
-		lib/built-in.o(.text)
-		lib/built-in.o(.rodata*)
-
-#if CONFIG_KERNEL_IN_ENVM_SIZE>128
-		kernel/built-in.o(.text)
-		kernel/built-in.o(.rodata*)
-		ipc/built-in.o(.text)
-		ipc/built-in.o(.rodata*)
-		block/built-in.o(.text)
-		block/built-in.o(.rodata*)
-		security/built-in.o(.text)
-		security/built-in.o(.rodata*)
-		crypto/built-in.o(.text)
-		crypto/built-in.o(.rodata*)
-		firmware/built-in.o(.text)
-		firmware/built-in.o(.rodata*)
-
-#if CONFIG_KERNEL_IN_ENVM_SIZE>384
-		drivers/built-in.o(.text)
-		drivers/built-in.o(.rodata*)
-		fs/built-in.o(.text)
-		fs/built-in.o(.rodata*)
-#if 0
-		net/built-in.o(.text)
-		net/built-in.o(.rodata*)
+#ifdef CONFIG_XIP_KERNEL
+	. = XIP_VIRT_ADDR(CONFIG_XIP_PHYS_ADDR);
+#else
+	. = PAGE_OFFSET + TEXT_OFFSET;
 #endif
-
-#endif /* CONFIG_KERNEL_IN_ENVM_SIZE>384 */
-#endif /* CONFIG_KERNEL_IN_ENVM_SIZE>128 */
-#endif /* CONFIG_KERNEL_IN_ENVM_SIZE>0 */
-
-		_envm_end = .;
-	} 
-
-	. = _envm_loc;
-#endif /* CONFIG_KERNEL_IN_ENVM */
-
+	.head.text : {
+		_text = .;
+		HEAD_TEXT
+	}
 	.text : {			/* Real text segment		*/
-		_text = .;		/* Text and read-only data	*/
+		_stext = .;		/* Text and read-only data	*/
 			__exception_text_start = .;
 			*(.exception.text)
 			__exception_text_end = .;
-#if defined(CONFIG_INITRAMFS_IS_LARGE)
-		__proc_info_begin = .;
-			*(.proc.info.init)
-		__proc_info_end = .;
-#endif
+			IRQENTRY_TEXT
 			TEXT_TEXT
 			SCHED_TEXT
 			LOCK_TEXT
@@ -194,16 +95,14 @@ SECTIONS
 			*(.fixup)
 #endif
 			*(.gnu.warning)
-			*(.rodata)
-			*(.rodata.*)
 			*(.glue_7)
 			*(.glue_7t)
+		. = ALIGN(4);
 		*(.got)			/* Global offset table		*/
+			ARM_CPU_KEEP(PROC_INFO)
 	}
 
 	RO_DATA(PAGE_SIZE)
-
-	_etext = .;			/* End of text and rodata section */
 
 #ifdef CONFIG_ARM_UNWIND
 	/*
@@ -222,10 +121,65 @@ SECTIONS
 	}
 #endif
 
+	_etext = .;			/* End of text and rodata section */
+
+#ifndef CONFIG_XIP_KERNEL
+	. = ALIGN(PAGE_SIZE);
+	__init_begin = .;
+#endif
+
+	INIT_TEXT_SECTION(8)
+	.exit.text : {
+		ARM_EXIT_KEEP(EXIT_TEXT)
+	}
+	.init.proc.info : {
+		ARM_CPU_DISCARD(PROC_INFO)
+	}
+	.init.arch.info : {
+		__arch_info_begin = .;
+		*(.arch.info.init)
+		__arch_info_end = .;
+	}
+	.init.tagtable : {
+		__tagtable_begin = .;
+		*(.taglist.init)
+		__tagtable_end = .;
+	}
+#ifdef CONFIG_SMP_ON_UP
+	.init.smpalt : {
+		__smpalt_begin = .;
+		*(.alt.smp.init)
+		__smpalt_end = .;
+	}
+#endif
+	.init.pv_table : {
+		__pv_table_begin = .;
+		*(.pv_table)
+		__pv_table_end = .;
+	}
+	.init.data : {
+#ifndef CONFIG_XIP_KERNEL
+		INIT_DATA
+#endif
+		INIT_SETUP(16)
+		INIT_CALLS
+		CON_INITCALL
+		SECURITY_INITCALL
+		INIT_RAM_FS
+	}
+#ifndef CONFIG_XIP_KERNEL
+	.exit.data : {
+		ARM_EXIT_KEEP(EXIT_DATA)
+	}
+#endif
+
+	PERCPU_SECTION(32)
+
 #ifdef CONFIG_XIP_KERNEL
 	__data_loc = ALIGN(4);		/* location in binary */
 	. = PAGE_OFFSET + TEXT_OFFSET;
 #else
+	__init_end = .;
 	. = ALIGN(THREAD_SIZE);
 	__data_loc = .;
 #endif
@@ -244,12 +198,14 @@ SECTIONS
 		. = ALIGN(PAGE_SIZE);
 		__init_begin = .;
 		INIT_DATA
+		ARM_EXIT_KEEP(EXIT_DATA)
 		. = ALIGN(PAGE_SIZE);
 		__init_end = .;
 #endif
 
 		NOSAVE_DATA
 		CACHELINE_ALIGNED_DATA(32)
+		READ_MOSTLY_DATA(32)
 
 		/*
 		 * The exception fixup table (might need resorting at runtime)
@@ -328,14 +284,13 @@ SECTIONS
 	}
 #endif
 
+	NOTES
+
 	BSS_SECTION(0, 0, 0)
 	_end = .;
 
 	STABS_DEBUG
 	.comment 0 : { *(.comment) }
-
-	/* Default discards */
-	DISCARDS
 }
 
 /*

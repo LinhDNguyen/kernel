@@ -16,25 +16,8 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/mmc/host.h>
-#include "sdhci-of.h"
-#include "sdhci.h"
-
-/*
- * Ops and quirks for the Freescale eSDHC controller.
- */
-
-#define ESDHC_DMA_SYSCTL	0x40c
-#define ESDHC_DMA_SNOOP		0x00000040
-
-#define ESDHC_SYSTEM_CONTROL	0x2c
-#define ESDHC_CLOCK_MASK	0x0000fff0
-#define ESDHC_PREDIV_SHIFT	8
-#define ESDHC_DIVIDER_SHIFT	4
-#define ESDHC_CLOCK_PEREN	0x00000004
-#define ESDHC_CLOCK_HCKEN	0x00000002
-#define ESDHC_CLOCK_IPGEN	0x00000001
-
-#define ESDHC_HOST_CONTROL_RES	0x05
+#include "sdhci-pltfm.h"
+#include "sdhci-esdhc.h"
 
 static u16 esdhc_readw(struct sdhci_host *host, int reg)
 {
@@ -68,76 +51,91 @@ static void esdhc_writeb(struct sdhci_host *host, u8 val, int reg)
 	sdhci_be32bs_writeb(host, val, reg);
 }
 
-static void esdhc_set_clock(struct sdhci_host *host, unsigned int clock)
-{
-	int pre_div = 2;
-	int div = 1;
-
-	clrbits32(host->ioaddr + ESDHC_SYSTEM_CONTROL, ESDHC_CLOCK_IPGEN |
-		  ESDHC_CLOCK_HCKEN | ESDHC_CLOCK_PEREN | ESDHC_CLOCK_MASK);
-
-	if (clock == 0)
-		goto out;
-
-	while (host->max_clk / pre_div / 16 > clock && pre_div < 256)
-		pre_div *= 2;
-
-	while (host->max_clk / pre_div / div > clock && div < 16)
-		div++;
-
-	dev_dbg(mmc_dev(host->mmc), "desired SD clock: %d, actual: %d\n",
-		clock, host->max_clk / pre_div / div);
-
-	pre_div >>= 1;
-	div--;
-
-	setbits32(host->ioaddr + ESDHC_SYSTEM_CONTROL, ESDHC_CLOCK_IPGEN |
-		  ESDHC_CLOCK_HCKEN | ESDHC_CLOCK_PEREN |
-		  div << ESDHC_DIVIDER_SHIFT | pre_div << ESDHC_PREDIV_SHIFT);
-	mdelay(100);
-out:
-	host->clock = clock;
-}
-
-static int esdhc_enable_dma(struct sdhci_host *host)
+static int esdhc_of_enable_dma(struct sdhci_host *host)
 {
 	setbits32(host->ioaddr + ESDHC_DMA_SYSCTL, ESDHC_DMA_SNOOP);
 	return 0;
 }
 
-static unsigned int esdhc_get_max_clock(struct sdhci_host *host)
+static unsigned int esdhc_of_get_max_clock(struct sdhci_host *host)
 {
-	struct sdhci_of_host *of_host = sdhci_priv(host);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 
-	return of_host->clock;
+	return pltfm_host->clock;
 }
 
-static unsigned int esdhc_get_min_clock(struct sdhci_host *host)
+static unsigned int esdhc_of_get_min_clock(struct sdhci_host *host)
 {
-	struct sdhci_of_host *of_host = sdhci_priv(host);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 
-	return of_host->clock / 256 / 16;
+	return pltfm_host->clock / 256 / 16;
 }
 
-struct sdhci_of_data sdhci_esdhc = {
-	.quirks = SDHCI_QUIRK_FORCE_BLK_SZ_2048 |
-		  SDHCI_QUIRK_BROKEN_CARD_DETECTION |
-		  SDHCI_QUIRK_NO_BUSY_IRQ |
-		  SDHCI_QUIRK_NONSTANDARD_CLOCK |
-		  SDHCI_QUIRK_DATA_TIMEOUT_USES_SDCLK |
-		  SDHCI_QUIRK_PIO_NEEDS_DELAY |
-		  SDHCI_QUIRK_RESTORE_IRQS_AFTER_RESET |
-		  SDHCI_QUIRK_NO_CARD_NO_RESET,
-	.ops = {
-		.readl = sdhci_be32bs_readl,
-		.readw = esdhc_readw,
-		.readb = sdhci_be32bs_readb,
-		.writel = sdhci_be32bs_writel,
-		.writew = esdhc_writew,
-		.writeb = esdhc_writeb,
-		.set_clock = esdhc_set_clock,
-		.enable_dma = esdhc_enable_dma,
-		.get_max_clock = esdhc_get_max_clock,
-		.get_min_clock = esdhc_get_min_clock,
-	},
+static struct sdhci_ops sdhci_esdhc_ops = {
+	.read_l = sdhci_be32bs_readl,
+	.read_w = esdhc_readw,
+	.read_b = sdhci_be32bs_readb,
+	.write_l = sdhci_be32bs_writel,
+	.write_w = esdhc_writew,
+	.write_b = esdhc_writeb,
+	.set_clock = esdhc_set_clock,
+	.enable_dma = esdhc_of_enable_dma,
+	.get_max_clock = esdhc_of_get_max_clock,
+	.get_min_clock = esdhc_of_get_min_clock,
 };
+
+static struct sdhci_pltfm_data sdhci_esdhc_pdata = {
+	/* card detection could be handled via GPIO */
+	.quirks = ESDHC_DEFAULT_QUIRKS | SDHCI_QUIRK_BROKEN_CARD_DETECTION
+		| SDHCI_QUIRK_NO_CARD_NO_RESET,
+	.ops = &sdhci_esdhc_ops,
+};
+
+static int __devinit sdhci_esdhc_probe(struct platform_device *pdev)
+{
+	return sdhci_pltfm_register(pdev, &sdhci_esdhc_pdata);
+}
+
+static int __devexit sdhci_esdhc_remove(struct platform_device *pdev)
+{
+	return sdhci_pltfm_unregister(pdev);
+}
+
+static const struct of_device_id sdhci_esdhc_of_match[] = {
+	{ .compatible = "fsl,mpc8379-esdhc" },
+	{ .compatible = "fsl,mpc8536-esdhc" },
+	{ .compatible = "fsl,esdhc" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, sdhci_esdhc_of_match);
+
+static struct platform_driver sdhci_esdhc_driver = {
+	.driver = {
+		.name = "sdhci-esdhc",
+		.owner = THIS_MODULE,
+		.of_match_table = sdhci_esdhc_of_match,
+	},
+	.probe = sdhci_esdhc_probe,
+	.remove = __devexit_p(sdhci_esdhc_remove),
+#ifdef CONFIG_PM
+	.suspend = sdhci_pltfm_suspend,
+	.resume = sdhci_pltfm_resume,
+#endif
+};
+
+static int __init sdhci_esdhc_init(void)
+{
+	return platform_driver_register(&sdhci_esdhc_driver);
+}
+module_init(sdhci_esdhc_init);
+
+static void __exit sdhci_esdhc_exit(void)
+{
+	platform_driver_unregister(&sdhci_esdhc_driver);
+}
+module_exit(sdhci_esdhc_exit);
+
+MODULE_DESCRIPTION("SDHCI OF driver for Freescale MPC eSDHC");
+MODULE_AUTHOR("Xiaobo Xie <X.Xie@freescale.com>, "
+	      "Anton Vorontsov <avorontsov@ru.mvista.com>");
+MODULE_LICENSE("GPL v2");

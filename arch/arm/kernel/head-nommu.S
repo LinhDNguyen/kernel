@@ -32,27 +32,27 @@
  * numbers for r1.
  *
  */
+	.arm
+
 	__HEAD
 ENTRY(stext)
+
+ THUMB(	adr	r9, BSYM(1f)	)	@ Kernel is always entered in ARM.
+ THUMB(	bx	r9		)	@ If this is a Thumb-2 kernel,
+ THUMB(	.thumb			)	@ switch to Thumb now.
+ THUMB(1:			)
+
 	setmode	PSR_F_BIT | PSR_I_BIT | SVC_MODE, r9 @ ensure svc mode
 						@ and irqs disabled
-#if defined(CONFIG_CPU_CP15)
-	mrc	p15, 0, r9, c0, c0		@ get processor id
-#elif defined(CONFIG_CPU_V7M)
-	ldr	r9, =0xe000ed00			@ CPUID register address
-	ldr	r9, [r9]
-#else
+#ifndef CONFIG_CPU_CP15
 	ldr	r9, =CONFIG_PROCESSOR_ID
+#else
+	mrc	p15, 0, r9, c0, c0		@ get processor id
 #endif
 	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
 	movs	r10, r5				@ invalid processor (r5=0)?
-	beq	__error_p			@ yes, error 'p'
-	bl	__lookup_machine_type		@ r5=machinfo
-	movs	r8, r5				@ invalid machine (r5=0)?
-	beq	__error_a			@ yes, error 'a'
+	beq	__error_p				@ yes, error 'p'
 
-	ldr	r13, __switch_data		@ address to jump to after
-						@ the initialization is done
 	adr	lr, BSYM(__after_proc_init)	@ return (PIC) address
  ARM(	add	pc, r10, #PROCINFO_INITFUNC	)
  THUMB(	add	r12, r10, #PROCINFO_INITFUNC	)
@@ -90,8 +90,7 @@ __after_proc_init:
 	mcr	p15, 0, r0, c1, c0, 0		@ write control reg
 #endif /* CONFIG_CPU_CP15 */
 
-	mov	r3, r13
-	mov	pc, r3				@ clear the BSS and jump
+	b	__mmap_switched			@ clear the BSS and jump
 						@ to start_kernel
 ENDPROC(__after_proc_init)
 	.ltorg

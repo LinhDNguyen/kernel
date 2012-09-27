@@ -90,15 +90,9 @@ int zlib_inflateInit2(z_streamp strm, int windowBits)
    Return state with length and distance decoding tables and index sizes set to
    fixed code decoding.  This returns fixed tables from inffixed.h.
  */
-#if defined(CONFIG_ARM_CORTEXM3)
-/* Stack on Cortex-M is too small */
-#   include "inffixed.h"
-#endif
 static void zlib_fixedtables(struct inflate_state *state)
 {
-#if !defined(CONFIG_ARM_CORTEXM3)
 #   include "inffixed.h"
-#endif
     state->lencode = lenfix;
     state->lenbits = 9;
     state->distcode = distfix;

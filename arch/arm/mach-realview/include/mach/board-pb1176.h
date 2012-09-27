@@ -26,6 +26,7 @@
 /*
  * Peripheral addresses
  */
+#define REALVIEW_PB1176_UART4_BASE		0x10009000 /* UART 4 */
 #define REALVIEW_PB1176_SCTL_BASE		0x10100000 /* System controller */
 #define REALVIEW_PB1176_SMC_BASE		0x10111000 /* SMC */
 #define REALVIEW_PB1176_DMC_BASE		0x10109000 /* DMC configuration */
@@ -35,7 +36,6 @@
 #define REALVIEW_PB1176_SEC_FLASH_BASE		0x3C000000 /* Secure flash */
 #define REALVIEW_PB1176_SEC_FLASH_SIZE		SZ_64M
 
-#define REALVIEW_PB1176_IEC_BASE		0x10103000 /* IEC */
 #define REALVIEW_PB1176_TIMER0_1_BASE		0x10104000 /* Timer 0 and 1 */
 #define REALVIEW_PB1176_TIMER2_3_BASE		0x10105000 /* Timer 2 and 3 */
 #define REALVIEW_PB1176_TIMER4_5_BASE		0x10106000 /* Timer 4 and 5 */

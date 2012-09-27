@@ -19,6 +19,7 @@
 
 #ifdef __KERNEL__
 
+#include <asm/hw_breakpoint.h>
 #include <asm/ptrace.h>
 #include <asm/types.h>
 
@@ -28,19 +29,10 @@
 #define STACK_TOP_MAX	TASK_SIZE
 #endif
 
-union debug_insn {
-	u32	arm;
-	u16	thumb;
-};
-
-struct debug_entry {
-	u32			address;
-	union debug_insn	insn;
-};
-
 struct debug_info {
-	int			nsaved;
-	struct debug_entry	bp[2];
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+	struct perf_event	*hbp[ARM_MAX_HBP_SLOTS];
+#endif
 };
 
 struct thread_struct {
@@ -57,26 +49,7 @@ struct thread_struct {
 #ifdef CONFIG_MMU
 #define nommu_start_thread(regs) do { } while (0)
 #else
-#ifndef CONFIG_CPU_V7M
 #define nommu_start_thread(regs) regs->ARM_r10 = current->mm->start_data
-#else
-#ifndef CONFIG_MPU
-#define nommu_start_thread(regs) do {					\
-	regs->ARM_r10 = current->mm->start_data;			\
-	regs->ARM_sp -= 32;		/* exception return state */	\
-	regs->ARM_EXC_lr = 0xfffffffdL;	/* exception lr */		\
-} while (0)
-#else 
-extern void mpu_start_thread(struct pt_regs *regs);
-
-#define nommu_start_thread(regs) do {					\
-	regs->ARM_r10 = current->mm->start_data;			\
-	regs->ARM_sp -= 32;		/* exception return state */	\
-	regs->ARM_EXC_lr = 0xfffffffdL;	/* exception lr */		\
-	mpu_start_thread(regs);						\
-} while (0)
-#endif /* CONFIG_MPU */
-#endif
 #endif
 
 #define start_thread(regs,pc,sp)					\
@@ -91,7 +64,7 @@ extern void mpu_start_thread(struct pt_regs *regs);
 	if (elf_hwcap & HWCAP_THUMB && pc & 1)				\
 		regs->ARM_cpsr |= PSR_T_BIT;				\
 	regs->ARM_cpsr |= PSR_ENDSTATE;					\
-	regs->ARM_pc = pc /*& ~1*/;	/* pc */			\
+	regs->ARM_pc = pc & ~1;		/* pc */			\
 	regs->ARM_sp = sp;		/* sp */			\
 	regs->ARM_r2 = stack[2];	/* r2 (envp) */			\
 	regs->ARM_r1 = stack[1];	/* r1 (argv) */			\
@@ -110,12 +83,7 @@ extern void release_thread(struct task_struct *);
 
 unsigned long get_wchan(struct task_struct *p);
 
-#if __LINUX_ARM_ARCH__ == 6
-/*
- * The store buffer on ARM11MPCore is not guaranteed to drain when the CPU
- * is performing aggresive loads. This is usually the case in a polling loop,
- * so we add a memory barrier to allow any pending stores to complete.
- */
+#if __LINUX_ARM_ARCH__ == 6 || defined(CONFIG_ARM_ERRATA_754327)
 #define cpu_relax()			smp_mb()
 #else
 #define cpu_relax()			barrier()

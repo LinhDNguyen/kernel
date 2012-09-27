@@ -18,8 +18,6 @@
 #include <asm/cacheflush.h>
 #include <asm/cachetype.h>
 #include <asm/proc-fns.h>
-#include <asm/mpu.h>
-#include <asm-generic/mm_hooks.h>
 
 void __check_kvm_seq(struct mm_struct *mm);
 
@@ -80,31 +78,11 @@ static inline void check_context(struct mm_struct *mm)
 #endif
 }
 
-#ifndef CONFIG_MPU
 #define init_new_context(tsk,mm)	0
-
-/*
- * If the MPU is turned on, we need to allocate the "MPU page
- * table" for the process, in addition to doing whatever generic
- * things init_new_context needs to do (which is nothing for this brangh)
- */
-#else
-#define init_new_context(tsk,mm)	(mpu_init_new_context(tsk,mm),0)
-#endif /* CONFIG_MPU */
 
 #endif
 
-#ifndef CONFIG_MPU
 #define destroy_context(mm)		do { } while(0)
-
-/*
- * If the MPU is turned on, we need to free up the "MPU page
- * table" for the process, in addition to doing whatever generic
- * things destroy_context needs to do (which is nothing for this brangh)
- */
-#else
-#define destroy_context(mm)		(mpu_destroy_context(mm),0)
-#endif /* CONFIG_MPU */
 
 /*
  * This is called when "tsk" is about to enter lazy TLB mode.
@@ -149,18 +127,38 @@ switch_mm(struct mm_struct *prev, struct mm_struct *next,
 		if (cache_is_vivt())
 			cpumask_clear_cpu(cpu, mm_cpumask(prev));
 	}
-#else /* ! CONFIG_MMU */
-
-#ifdef CONFIG_MPU
-	if (prev != next) {
-		mpu_switch_mm(prev, next);
-	}
-#endif /* CONFIG_MPU */
-
-#endif /* CONFIG_MMU */
+#endif
 }
 
 #define deactivate_mm(tsk,mm)	do { } while (0)
 #define activate_mm(prev,next)	switch_mm(prev, next, NULL)
+
+/*
+ * We are inserting a "fake" vma for the user-accessible vector page so
+ * gdb and friends can get to it through ptrace and /proc/<pid>/mem.
+ * But we also want to remove it before the generic code gets to see it
+ * during process exit or the unmapping of it would  cause total havoc.
+ * (the macro is used as remove_vma() is static to mm/mmap.c)
+ */
+#define arch_exit_mmap(mm) \
+do { \
+	struct vm_area_struct *high_vma = find_vma(mm, 0xffff0000); \
+	if (high_vma) { \
+		BUG_ON(high_vma->vm_next);  /* it should be last */ \
+		if (high_vma->vm_prev) \
+			high_vma->vm_prev->vm_next = NULL; \
+		else \
+			mm->mmap = NULL; \
+		rb_erase(&high_vma->vm_rb, &mm->mm_rb); \
+		mm->mmap_cache = NULL; \
+		mm->map_count--; \
+		remove_vma(high_vma); \
+	} \
+} while (0)
+
+static inline void arch_dup_mmap(struct mm_struct *oldmm,
+				 struct mm_struct *mm)
+{
+}
 
 #endif

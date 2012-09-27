@@ -6,26 +6,18 @@ config ARM_VIC
 
 config ARM_VIC_NR
 	int
+	default 4 if ARCH_S5PV210
+	default 3 if ARCH_S5PC100
 	default 2
 	depends on ARM_VIC
 	help
 	  The maximum number of VICs available in the system, for
 	  power management.
 
-config ARM_NVIC
+config ICST
 	bool
 
-config ARM_CORTEXM3
-	bool
-	select HAVE_CLK
-	select COMMON_CLKDEV
-	select GENERIC_TIME
-	select GENERIC_CLOCKEVENTS
-
-config ICST525
-	bool
-
-config ICST307
+config PL330
 	bool
 
 config SA1111
@@ -46,7 +38,4 @@ config SHARP_PARAM
 	bool
 
 config SHARP_SCOOP
-	bool
-
-config COMMON_CLKDEV
 	bool

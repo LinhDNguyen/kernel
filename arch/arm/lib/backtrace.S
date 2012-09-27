@@ -28,7 +28,7 @@ ENTRY(__backtrace)
 
 ENTRY(c_backtrace)
 
-#if defined(CONFIG_THUMB2_KERNEL) || !defined(CONFIG_FRAME_POINTER) || !defined(CONFIG_PRINTK)
+#if !defined(CONFIG_FRAME_POINTER) || !defined(CONFIG_PRINTK)
 		mov	pc, lr
 ENDPROC(__backtrace)
 ENDPROC(c_backtrace)
@@ -110,13 +110,13 @@ no_frame:	ldmfd	sp!, {r4 - r8, pc}
 ENDPROC(__backtrace)
 ENDPROC(c_backtrace)
 		
-		.section __ex_table,"a"
+		.pushsection __ex_table,"a"
 		.align	3
 		.long	1001b, 1006b
 		.long	1002b, 1006b
 		.long	1003b, 1006b
 		.long	1004b, 1006b
-		.previous
+		.popsection
 
 #define instr r4
 #define reg   r5

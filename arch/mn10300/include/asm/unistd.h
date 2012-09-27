@@ -349,10 +349,11 @@
 #define __NR_rt_tgsigqueueinfo	336
 #define __NR_perf_event_open	337
 #define __NR_recvmmsg		338
+#define __NR_setns		339
 
 #ifdef __KERNEL__
 
-#define NR_syscalls 339
+#define NR_syscalls 340
 
 /*
  * specify the deprecated syscalls we want to support on this arch
@@ -363,6 +364,7 @@
 #define __ARCH_WANT_STAT64
 #define __ARCH_WANT_SYS_ALARM
 #define __ARCH_WANT_SYS_GETHOSTNAME
+#define __ARCH_WANT_SYS_IPC
 #define __ARCH_WANT_SYS_PAUSE
 #define __ARCH_WANT_SYS_SGETMASK
 #define __ARCH_WANT_SYS_SIGNAL
@@ -375,6 +377,7 @@
 #define __ARCH_WANT_SYS_LLSEEK
 #define __ARCH_WANT_SYS_NICE
 #define __ARCH_WANT_SYS_OLD_GETRLIMIT
+#define __ARCH_WANT_SYS_OLD_SELECT
 #define __ARCH_WANT_SYS_OLDUMOUNT
 #define __ARCH_WANT_SYS_SIGPENDING
 #define __ARCH_WANT_SYS_SIGPROCMASK

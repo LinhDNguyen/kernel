@@ -24,13 +24,13 @@
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
-#include <mach/hardware.h>
+#include <mach/pxa3xx.h>
 #include <mach/audio.h>
 #include <mach/pxafb.h>
 #include <mach/zylonite.h>
 #include <mach/mmc.h>
 #include <mach/ohci.h>
-#include <mach/pxa27x_keypad.h>
+#include <plat/pxa27x_keypad.h>
 #include <plat/pxa3xx_nand.h>
 
 #include "devices.h"
@@ -44,6 +44,16 @@ int wm9713_irq;
 
 int lcd_id;
 int lcd_orientation;
+
+struct platform_device pxa_device_wm9713_audio = {
+	.name		= "wm9713-codec",
+	.id		= -1,
+};
+
+static void __init zylonite_init_wm9713_audio(void)
+{
+	platform_device_register(&pxa_device_wm9713_audio);
+}
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -198,7 +208,7 @@ static void __init zylonite_init_lcd(void)
 	platform_device_register(&zylonite_backlight_device);
 
 	if (lcd_id & 0x20) {
-		set_pxa_fb_info(&zylonite_sharp_lcd_info);
+		pxa_set_fb_info(NULL, &zylonite_sharp_lcd_info);
 		return;
 	}
 
@@ -210,7 +220,7 @@ static void __init zylonite_init_lcd(void)
 	else
 		zylonite_toshiba_lcd_info.modes = &toshiba_ltm04c380k_mode;
 
-	set_pxa_fb_info(&zylonite_toshiba_lcd_info);
+	pxa_set_fb_info(NULL, &zylonite_toshiba_lcd_info);
 }
 #else
 static inline void zylonite_init_lcd(void) {}
@@ -218,7 +228,7 @@ static inline void zylonite_init_lcd(void) {}
 
 #if defined(CONFIG_MMC)
 static struct pxamci_platform_data zylonite_mci_platform_data = {
-	.detect_delay	= 20,
+	.detect_delay_ms= 200,
 	.ocr_mask	= MMC_VDD_32_33|MMC_VDD_33_34,
 	.gpio_card_detect = EXT_GPIO(0),
 	.gpio_card_ro	= EXT_GPIO(2),
@@ -226,7 +236,7 @@ static struct pxamci_platform_data zylonite_mci_platform_data = {
 };
 
 static struct pxamci_platform_data zylonite_mci2_platform_data = {
-	.detect_delay	= 20,
+	.detect_delay_ms= 200,
 	.ocr_mask	= MMC_VDD_32_33|MMC_VDD_33_34,
 	.gpio_card_detect = EXT_GPIO(1),
 	.gpio_card_ro	= EXT_GPIO(3),
@@ -234,7 +244,7 @@ static struct pxamci_platform_data zylonite_mci2_platform_data = {
 };
 
 static struct pxamci_platform_data zylonite_mci3_platform_data = {
-	.detect_delay	= 20,
+	.detect_delay_ms= 200,
 	.ocr_mask	= MMC_VDD_32_33|MMC_VDD_33_34,
 	.gpio_card_detect = EXT_GPIO(30),
 	.gpio_card_ro	= EXT_GPIO(31),
@@ -408,14 +418,15 @@ static void __init zylonite_init(void)
 	zylonite_init_nand();
 	zylonite_init_leds();
 	zylonite_init_ohci();
+	zylonite_init_wm9713_audio();
 }
 
 MACHINE_START(ZYLONITE, "PXA3xx Platform Development Kit (aka Zylonite)")
-	.phys_io	= 0x40000000,
 	.boot_params	= 0xa0000100,
-	.io_pg_offst	= (io_p2v(0x40000000) >> 18) & 0xfffc,
-	.map_io		= pxa_map_io,
+	.map_io		= pxa3xx_map_io,
+	.nr_irqs	= ZYLONITE_NR_IRQS,
 	.init_irq	= pxa3xx_init_irq,
+	.handle_irq	= pxa3xx_handle_irq,
 	.timer		= &pxa_timer,
 	.init_machine	= zylonite_init,
 MACHINE_END

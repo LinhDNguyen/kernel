@@ -12,9 +12,23 @@
 #ifndef __ARM_PMU_H__
 #define __ARM_PMU_H__
 
+#include <linux/interrupt.h>
+
 enum arm_pmu_type {
 	ARM_PMU_DEVICE_CPU	= 0,
 	ARM_NUM_PMU_DEVICES,
+};
+
+/*
+ * struct arm_pmu_platdata - ARM PMU platform data
+ *
+ * @handle_irq: an optional handler which will be called from the interrupt and
+ * passed the address of the low level handler, and can be used to implement
+ * any platform specific handling before or after calling it.
+ */
+struct arm_pmu_platdata {
+	irqreturn_t (*handle_irq)(int irq, void *dev,
+				  irq_handler_t pmu_handler);
 };
 
 #ifdef CONFIG_CPU_HAS_PMU
@@ -27,7 +41,7 @@ enum arm_pmu_type {
  * encoded error on failure.
  */
 extern struct platform_device *
-reserve_pmu(enum arm_pmu_type device);
+reserve_pmu(enum arm_pmu_type type);
 
 /**
  * release_pmu() - Relinquish control of the performance counters
@@ -38,7 +52,7 @@ reserve_pmu(enum arm_pmu_type device);
  * a cookie.
  */
 extern int
-release_pmu(struct platform_device *pdev);
+release_pmu(enum arm_pmu_type type);
 
 /**
  * init_pmu() - Initialise the PMU.
@@ -48,26 +62,26 @@ release_pmu(struct platform_device *pdev);
  * the actual hardware initialisation.
  */
 extern int
-init_pmu(enum arm_pmu_type device);
+init_pmu(enum arm_pmu_type type);
 
 #else /* CONFIG_CPU_HAS_PMU */
 
 #include <linux/err.h>
 
 static inline struct platform_device *
-reserve_pmu(enum arm_pmu_type device)
+reserve_pmu(enum arm_pmu_type type)
 {
 	return ERR_PTR(-ENODEV);
 }
 
 static inline int
-release_pmu(struct platform_device *pdev)
+release_pmu(enum arm_pmu_type type)
 {
 	return -ENODEV;
 }
 
 static inline int
-init_pmu(enum arm_pmu_type device)
+init_pmu(enum arm_pmu_type type)
 {
 	return -ENODEV;
 }

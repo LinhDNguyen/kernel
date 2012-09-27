@@ -1,5 +1,4 @@
-/*
- * arch/arm/mach-vexpress/include/mach/debug-macro.S
+/* arch/arm/mach-realview/include/mach/debug-macro.S
  *
  * Debugging macro include header
  *
@@ -11,23 +10,12 @@
  * published by the Free Software Foundation.
  */
 
-#ifndef DEBUG_LL_UART_OFFSET
 #define DEBUG_LL_UART_OFFSET	0x00009000
-#elif DEBUG_LL_UART_OFFSET != 0x00009000
-#warning "DEBUG_LL_UART_OFFSET already defined to a different value"
-#endif
 
-#ifndef DEBUG_LL_UART_OFFSET
-#error "Unknown Versatile Express platform"
-#endif
-
-		.macro	addruart,rx
-		mrc	p15, 0, \rx, c1, c0
-		tst	\rx, #1			@ MMU enabled?
-		ite	eq
-		moveq	\rx,      #0x10000000
-		movne	\rx,      #0xfb000000	@ virtual base
-		orr	\rx, \rx, #DEBUG_LL_UART_OFFSET
+		.macro	addruart,rp,rv
+		mov	\rp, #DEBUG_LL_UART_OFFSET
+		orr	\rv, \rp, #0xf8000000	@ virtual base
+		orr	\rp, \rp, #0x10000000	@ physical base
 		.endm
 
 #include <asm/hardware/debug-pl01x.S>

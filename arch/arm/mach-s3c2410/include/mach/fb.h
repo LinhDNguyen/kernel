@@ -37,6 +37,7 @@ struct s3c2410fb_display {
 	unsigned short bpp;
 
 	unsigned pixclock;		/* pixclock in picoseconds */
+	unsigned setclkval;		/* clkval */
 	unsigned short left_margin;  /* value in pixels (TFT) or HCLKs (STN) */
 	unsigned short right_margin; /* value in pixels (TFT) or HCLKs (STN) */
 	unsigned short hsync_len;    /* value in pixels (TFT) or HCLKs (STN) */

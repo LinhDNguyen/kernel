@@ -3,10 +3,10 @@
  *
  * Copyright (C) 2006 Silicon Motion Technology Corp.
  * Authors:	Ge Wang, gewang@siliconmotion.com
- *	 	Boyod boyod.yang@siliconmotion.com.cn
+ *		Boyod boyod.yang@siliconmotion.com.cn
  *
  * Copyright (C) 2009 Lemote, Inc.
- * Author: Wu Zhangjin, wuzj@lemote.com
+ * Author: Wu Zhangjin, wuzhangjin@gmail.com
  *
  *  This file is subject to the terms and conditions of the GNU General Public
  *  License. See the file COPYING in the main directory of this archive for
@@ -29,11 +29,6 @@
 #define SCREEN_X_RES      1024
 #define SCREEN_Y_RES      600
 #define SCREEN_BPP        16
-
-#ifndef FIELD_OFFSET
-#define FIELD_OFSFET(type, field) \
-	((unsigned long) (PUCHAR) & (((type *)0)->field))
-#endif
 
 /*Assume SM712 graphics chip has 4MB VRAM */
 #define SM712_VIDEOMEMORYSIZE	  0x00400000
@@ -790,4 +785,4 @@ struct ModeInit VGAMode[] = {
 	 },
 };
 
-#define numVGAModes		(sizeof(VGAMode) / sizeof(struct ModeInit))
+#define numVGAModes		ARRAY_SIZE(VGAMode)

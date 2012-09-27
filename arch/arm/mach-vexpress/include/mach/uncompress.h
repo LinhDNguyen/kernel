@@ -17,26 +17,12 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-#include <mach/hardware.h>
-#include <asm/mach-types.h>
-
-#include <mach/board-pca9.h>
-
 #define AMBA_UART_DR(base)	(*(volatile unsigned char *)((base) + 0x00))
 #define AMBA_UART_LCRH(base)	(*(volatile unsigned char *)((base) + 0x2c))
 #define AMBA_UART_CR(base)	(*(volatile unsigned char *)((base) + 0x30))
 #define AMBA_UART_FR(base)	(*(volatile unsigned char *)((base) + 0x18))
 
-/*
- * Return the UART base address
- */
-static inline unsigned long get_uart_base(void)
-{
-	if (machine_is_vexpress())
-		return VEXPRESS_UART0_BASE;
-	else
-		return 0;
-}
+#define get_uart_base()	(0x10000000 + 0x00009000)
 
 /*
  * This does not append a newline

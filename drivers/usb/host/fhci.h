@@ -20,13 +20,14 @@
 
 #include <linux/kernel.h>
 #include <linux/types.h>
+#include <linux/bug.h>
 #include <linux/spinlock.h>
 #include <linux/interrupt.h>
 #include <linux/kfifo.h>
 #include <linux/io.h>
 #include <linux/usb.h>
+#include <linux/usb/hcd.h>
 #include <asm/qe.h>
-#include "../core/hcd.h"
 
 #define USB_CLOCK	48000000
 
@@ -81,7 +82,7 @@
 #define USB_TD_RX_ER_NONOCT	0x40000000 /* Tx Non Octet Aligned Packet */
 #define USB_TD_RX_ER_BITSTUFF	0x20000000 /* Frame Aborted-Received pkt */
 #define USB_TD_RX_ER_CRC	0x10000000 /* CRC error */
-#define USB_TD_RX_ER_OVERUN	0x08000000 /* Over - run occured */
+#define USB_TD_RX_ER_OVERUN	0x08000000 /* Over - run occurred */
 #define USB_TD_RX_ER_PID	0x04000000 /* wrong PID received */
 #define USB_TD_RX_DATA_UNDERUN	0x02000000 /* shorter than expected */
 #define USB_TD_RX_DATA_OVERUN	0x01000000 /* longer than expected */
@@ -362,7 +363,7 @@ struct ed {
 struct td {
 	void *data;		 /* a pointer to the data buffer */
 	unsigned int len;	 /* length of the data to be submitted */
-	unsigned int actual_len; /* actual bytes transfered on this td */
+	unsigned int actual_len; /* actual bytes transferred on this td */
 	enum fhci_ta_type type;	 /* transaction type */
 	u8 toggle;		 /* toggle for next trans. within this TD */
 	u16 iso_index;		 /* ISO transaction index */
@@ -515,9 +516,13 @@ static inline int cq_put(struct kfifo *kfifo, void *p)
 
 static inline void *cq_get(struct kfifo *kfifo)
 {
-	void *p = NULL;
+	unsigned int sz;
+	void *p;
 
-	kfifo_out(kfifo, (void *)&p, sizeof(p));
+	sz = kfifo_out(kfifo, (void *)&p, sizeof(p));
+	if (sz != sizeof(p))
+		return NULL;
+
 	return p;
 }
 

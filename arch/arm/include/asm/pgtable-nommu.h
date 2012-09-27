@@ -87,16 +87,11 @@ extern unsigned int kobjsize(const void *objp);
  * All 32bit addresses are effectively valid for vmalloc...
  * Sort of meaningless for non-VM targets.
  */
-#define	VMALLOC_START	0
-#define	VMALLOC_END	0xffffffff
+#define	VMALLOC_START	0UL
+#define	VMALLOC_END	0xffffffffUL
 
 #define FIRST_USER_ADDRESS      (0)
 
-/* provide a special get_unmapped_area for framebuffer mmaps of nommu */
-extern unsigned long get_fb_unmapped_area(struct file *filp, unsigned long,
-					  unsigned long, unsigned long,
-					  unsigned long);
-#define HAVE_ARCH_FB_UNMAPPED_AREA
 #include <asm-generic/pgtable.h>
 
 #else 

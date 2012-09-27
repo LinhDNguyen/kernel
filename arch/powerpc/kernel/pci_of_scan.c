@@ -135,7 +135,7 @@ struct pci_dev *of_create_pci_dev(struct device_node *node,
 	pr_debug("    create device, devfn: %x, type: %s\n", devfn, type);
 
 	dev->bus = bus;
-	dev->sysdata = node;
+	dev->dev.of_node = of_node_get(node);
 	dev->dev.parent = bus->bridge;
 	dev->dev.bus = &pci_bus_type;
 	dev->devfn = devfn;
@@ -202,9 +202,9 @@ EXPORT_SYMBOL(of_create_pci_dev);
  * this routine in turn call of_scan_bus() recusively to scan for more child
  * devices.
  */
-void __devinit of_scan_pci_bridge(struct device_node *node,
-				  struct pci_dev *dev)
+void __devinit of_scan_pci_bridge(struct pci_dev *dev)
 {
+	struct device_node *node = dev->dev.of_node;
 	struct pci_bus *bus;
 	const u32 *busrange, *ranges;
 	int len, i, mode;
@@ -238,7 +238,6 @@ void __devinit of_scan_pci_bridge(struct device_node *node,
 	bus->primary = dev->bus->number;
 	bus->subordinate = busrange[1];
 	bus->bridge_ctl = 0;
-	bus->sysdata = node;
 
 	/* parse ranges property */
 	/* PCI #address-cells == 3 and #size-cells == 2 always */
@@ -304,12 +303,14 @@ static void __devinit __of_scan_bus(struct device_node *node,
 	int reglen, devfn;
 	struct pci_dev *dev;
 
-	pr_debug("of_scan_bus(%s) bus no %d... \n",
+	pr_debug("of_scan_bus(%s) bus no %d...\n",
 		 node->full_name, bus->number);
 
 	/* Scan direct children */
 	for_each_child_of_node(node, child) {
 		pr_debug("  * %s\n", child->full_name);
+		if (!of_device_is_available(child))
+			continue;
 		reg = of_get_property(child, "reg", &reglen);
 		if (reg == NULL || reglen < 20)
 			continue;
@@ -333,9 +334,7 @@ static void __devinit __of_scan_bus(struct device_node *node,
 	list_for_each_entry(dev, &bus->devices, bus_list) {
 		if (dev->hdr_type == PCI_HEADER_TYPE_BRIDGE ||
 		    dev->hdr_type == PCI_HEADER_TYPE_CARDBUS) {
-			struct device_node *child = pci_device_to_OF_node(dev);
-			if (dev)
-				of_scan_pci_bridge(child, dev);
+			of_scan_pci_bridge(dev);
 		}
 	}
 }

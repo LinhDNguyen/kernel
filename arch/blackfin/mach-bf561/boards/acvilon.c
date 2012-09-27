@@ -44,6 +44,7 @@
 #include <linux/spi/flash.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
+#include <linux/jiffies.h>
 #include <linux/i2c-pca-platform.h>
 #include <linux/delay.h>
 #include <linux/io.h>
@@ -112,7 +113,7 @@ static struct resource bfin_i2c_pca_resources[] = {
 struct i2c_pca9564_pf_platform_data pca9564_platform_data = {
 	.gpio = -1,
 	.i2c_clock_speed = 330000,
-	.timeout = 10000
+	.timeout = HZ,
 };
 
 /* PCA9564 I2C Bus driver */
@@ -176,7 +177,7 @@ static struct resource smsc911x_resources[] = {
 };
 
 static struct smsc911x_platform_config smsc911x_config = {
-	.flags = SMSC911X_USE_32BIT,
+	.flags = SMSC911X_USE_32BIT | SMSC911X_SAVE_MAC_ADDRESS,
 	.irq_polarity = SMSC911X_IRQ_POLARITY_ACTIVE_LOW,
 	.irq_type = SMSC911X_IRQ_TYPE_OPEN_DRAIN,
 	.phy_interface = PHY_INTERFACE_MODE_MII,
@@ -223,7 +224,7 @@ static struct resource bfin_uart0_resources[] = {
 	 },
 };
 
-unsigned short bfin_uart0_peripherals[] = {
+static unsigned short bfin_uart0_peripherals[] = {
 	P_UART0_TX, P_UART0_RX, 0
 };
 
@@ -242,7 +243,6 @@ static struct platform_device bfin_uart0_device = {
 
 #if defined(CONFIG_MTD_NAND_PLATFORM) || defined(CONFIG_MTD_NAND_PLATFORM_MODULE)
 
-#ifdef CONFIG_MTD_PARTITIONS
 const char *part_probes[] = { "cmdlinepart", NULL };
 
 static struct mtd_partition bfin_plat_nand_partitions[] = {
@@ -256,7 +256,6 @@ static struct mtd_partition bfin_plat_nand_partitions[] = {
 	     .offset = MTDPART_OFS_APPEND,
 	     },
 };
-#endif
 
 #define BFIN_NAND_PLAT_CLE 2
 #define BFIN_NAND_PLAT_ALE 3
@@ -283,12 +282,11 @@ static int bfin_plat_nand_dev_ready(struct mtd_info *mtd)
 
 static struct platform_nand_data bfin_plat_nand_data = {
 	.chip = {
+		 .nr_chips = 1,
 		 .chip_delay = 30,
-#ifdef CONFIG_MTD_PARTITIONS
 		 .part_probe_types = part_probes,
 		 .partitions = bfin_plat_nand_partitions,
 		 .nr_partitions = ARRAY_SIZE(bfin_plat_nand_partitions),
-#endif
 		 },
 	.ctrl = {
 		 .cmd_ctrl = bfin_plat_nand_cmd_ctrl,
@@ -300,7 +298,7 @@ static struct platform_nand_data bfin_plat_nand_data = {
 static struct resource bfin_plat_nand_resources = {
 	.start = 0x24000000,
 	.end = 0x24000000 + (1 << MAX(BFIN_NAND_PLAT_CLE, BFIN_NAND_PLAT_ALE)),
-	.flags = IORESOURCE_IO,
+	.flags = IORESOURCE_MEM,
 };
 
 static struct platform_device bfin_async_nand_device = {
@@ -366,14 +364,6 @@ static struct flash_platform_data bfin_spi_dataflash_data = {
 /* DataFlash chip */
 static struct bfin5xx_spi_chip data_flash_chip_info = {
 	.enable_dma = 0,	/* use dma transfer with this chip */
-	.bits_per_word = 8,
-};
-#endif
-
-#if defined(CONFIG_SPI_SPIDEV) || defined(CONFIG_SPI_SPIDEV_MODULE)
-static struct bfin5xx_spi_chip spidev_chip_info = {
-	.enable_dma = 0,
-	.bits_per_word = 8,
 };
 #endif
 
@@ -422,7 +412,6 @@ static struct spi_board_info bfin_spi_board_info[] __initdata = {
 	 .max_speed_hz = 3125000,	/* max spi clock (SCK) speed in HZ */
 	 .bus_num = 0,
 	 .chip_select = 3,
-	 .controller_data = &spidev_chip_info,
 	 },
 #endif
 #if defined(CONFIG_MTD_DATAFLASH) || defined(CONFIG_MTD_DATAFLASH_MODULE)

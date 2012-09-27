@@ -46,20 +46,24 @@ xattr_permission(struct inode *inode, const char *name, int mask)
 		return 0;
 
 	/*
-	 * The trusted.* namespace can only be accessed by a privileged user.
+	 * The trusted.* namespace can only be accessed by privileged users.
 	 */
-	if (!strncmp(name, XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN))
-		return (capable(CAP_SYS_ADMIN) ? 0 : -EPERM);
+	if (!strncmp(name, XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN)) {
+		if (!capable(CAP_SYS_ADMIN))
+			return (mask & MAY_WRITE) ? -EPERM : -ENODATA;
+		return 0;
+	}
 
-	/* In user.* namespace, only regular files and directories can have
+	/*
+	 * In the user.* namespace, only regular files and directories can have
 	 * extended attributes. For sticky directories, only the owner and
-	 * privileged user can write attributes.
+	 * privileged users can write attributes.
 	 */
 	if (!strncmp(name, XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN)) {
 		if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
-			return -EPERM;
+			return (mask & MAY_WRITE) ? -EPERM : -ENODATA;
 		if (S_ISDIR(inode->i_mode) && (inode->i_mode & S_ISVTX) &&
-		    (mask & MAY_WRITE) && !is_owner_or_cap(inode))
+		    (mask & MAY_WRITE) && !inode_owner_or_capable(inode))
 			return -EPERM;
 	}
 
@@ -87,7 +91,11 @@ int __vfs_setxattr_noperm(struct dentry *dentry, const char *name,
 {
 	struct inode *inode = dentry->d_inode;
 	int error = -EOPNOTSUPP;
+	int issec = !strncmp(name, XATTR_SECURITY_PREFIX,
+				   XATTR_SECURITY_PREFIX_LEN);
 
+	if (issec)
+		inode->i_flags &= ~S_NOSEC;
 	if (inode->i_op->setxattr) {
 		error = inode->i_op->setxattr(dentry, name, value, size, flags);
 		if (!error) {
@@ -95,8 +103,7 @@ int __vfs_setxattr_noperm(struct dentry *dentry, const char *name,
 			security_inode_post_setxattr(dentry, name, value,
 						     size, flags);
 		}
-	} else if (!strncmp(name, XATTR_SECURITY_PREFIX,
-				XATTR_SECURITY_PREFIX_LEN)) {
+	} else if (issec) {
 		const char *suffix = name + XATTR_SECURITY_PREFIX_LEN;
 		error = security_inode_setsecurity(inode, suffix, value,
 						   size, flags);
@@ -590,10 +597,10 @@ strcmp_prefix(const char *a, const char *a_prefix)
 /*
  * Find the xattr_handler with the matching prefix.
  */
-static struct xattr_handler *
-xattr_resolve_name(struct xattr_handler **handlers, const char **name)
+static const struct xattr_handler *
+xattr_resolve_name(const struct xattr_handler **handlers, const char **name)
 {
-	struct xattr_handler *handler;
+	const struct xattr_handler *handler;
 
 	if (!*name)
 		return NULL;
@@ -614,7 +621,7 @@ xattr_resolve_name(struct xattr_handler **handlers, const char **name)
 ssize_t
 generic_getxattr(struct dentry *dentry, const char *name, void *buffer, size_t size)
 {
-	struct xattr_handler *handler;
+	const struct xattr_handler *handler;
 
 	handler = xattr_resolve_name(dentry->d_sb->s_xattr, &name);
 	if (!handler)
@@ -629,7 +636,7 @@ generic_getxattr(struct dentry *dentry, const char *name, void *buffer, size_t s
 ssize_t
 generic_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
 {
-	struct xattr_handler *handler, **handlers = dentry->d_sb->s_xattr;
+	const struct xattr_handler *handler, **handlers = dentry->d_sb->s_xattr;
 	unsigned int size = 0;
 
 	if (!buffer) {
@@ -659,14 +666,14 @@ generic_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
 int
 generic_setxattr(struct dentry *dentry, const char *name, const void *value, size_t size, int flags)
 {
-	struct xattr_handler *handler;
+	const struct xattr_handler *handler;
 
 	if (size == 0)
 		value = "";  /* empty EA, do not remove */
 	handler = xattr_resolve_name(dentry->d_sb->s_xattr, &name);
 	if (!handler)
 		return -EOPNOTSUPP;
-	return handler->set(dentry, name, value, size, 0, handler->flags);
+	return handler->set(dentry, name, value, size, flags, handler->flags);
 }
 
 /*
@@ -676,7 +683,7 @@ generic_setxattr(struct dentry *dentry, const char *name, const void *value, siz
 int
 generic_removexattr(struct dentry *dentry, const char *name)
 {
-	struct xattr_handler *handler;
+	const struct xattr_handler *handler;
 
 	handler = xattr_resolve_name(dentry->d_sb->s_xattr, &name);
 	if (!handler)

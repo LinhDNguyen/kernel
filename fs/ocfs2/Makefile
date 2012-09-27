@@ -1,6 +1,6 @@
-EXTRA_CFLAGS += -Ifs/ocfs2
+ccflags-y := -Ifs/ocfs2
 
-EXTRA_CFLAGS += -DCATCH_BH_JBD_RACES
+ccflags-y += -DCATCH_BH_JBD_RACES
 
 obj-$(CONFIG_OCFS2_FS) += 	\
 	ocfs2.o			\
@@ -29,6 +29,8 @@ ocfs2-objs := \
 	mmap.o 			\
 	namei.o 		\
 	refcounttree.o		\
+	reservations.o		\
+	move_extents.o		\
 	resize.o		\
 	slot_map.o 		\
 	suballoc.o 		\
@@ -46,6 +48,7 @@ ocfs2_stackglue-objs := stackglue.o
 ocfs2_stack_o2cb-objs := stack_o2cb.o
 ocfs2_stack_user-objs := stack_user.o
 
+obj-$(CONFIG_OCFS2_FS) += dlmfs/
 # cluster/ is always needed when OCFS2_FS for masklog support
 obj-$(CONFIG_OCFS2_FS) += cluster/
 obj-$(CONFIG_OCFS2_FS_O2CB) += dlm/

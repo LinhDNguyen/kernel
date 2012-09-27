@@ -392,6 +392,16 @@
 #define __NR_rt_tgsigqueueinfo		(__NR_SYSCALL_BASE+363)
 #define __NR_perf_event_open		(__NR_SYSCALL_BASE+364)
 #define __NR_recvmmsg			(__NR_SYSCALL_BASE+365)
+#define __NR_accept4			(__NR_SYSCALL_BASE+366)
+#define __NR_fanotify_init		(__NR_SYSCALL_BASE+367)
+#define __NR_fanotify_mark		(__NR_SYSCALL_BASE+368)
+#define __NR_prlimit64			(__NR_SYSCALL_BASE+369)
+#define __NR_name_to_handle_at		(__NR_SYSCALL_BASE+370)
+#define __NR_open_by_handle_at		(__NR_SYSCALL_BASE+371)
+#define __NR_clock_adjtime		(__NR_SYSCALL_BASE+372)
+#define __NR_syncfs			(__NR_SYSCALL_BASE+373)
+#define __NR_sendmmsg			(__NR_SYSCALL_BASE+374)
+#define __NR_setns			(__NR_SYSCALL_BASE+375)
 
 /*
  * The following SWIs are ARM private.
@@ -402,11 +412,6 @@
 #define __ARM_NR_usr26			(__ARM_NR_BASE+3)
 #define __ARM_NR_usr32			(__ARM_NR_BASE+4)
 #define __ARM_NR_set_tls		(__ARM_NR_BASE+5)
-#define __ARM_NR_atomicops		(__ARM_NR_BASE+0x800)/* raise SIGILL when this
-								operation is not implemented */
-
-/* atomicops args */
-#define SYS_ARM_ATOMIC_SET		1     /* set variable */
 
 /*
  * *NOTE*: This is a ghost syscall private to the kernel.  Only the
@@ -448,9 +453,12 @@
 #define __ARCH_WANT_SYS_SIGPROCMASK
 #define __ARCH_WANT_SYS_RT_SIGACTION
 #define __ARCH_WANT_SYS_RT_SIGSUSPEND
+#define __ARCH_WANT_SYS_OLD_MMAP
+#define __ARCH_WANT_SYS_OLD_SELECT
 
 #if !defined(CONFIG_AEABI) || defined(CONFIG_OABI_COMPAT)
 #define __ARCH_WANT_SYS_TIME
+#define __ARCH_WANT_SYS_IPC
 #define __ARCH_WANT_SYS_OLDUMOUNT
 #define __ARCH_WANT_SYS_ALARM
 #define __ARCH_WANT_SYS_UTIME
@@ -470,8 +478,8 @@
 /*
  * Unimplemented (or alternatively implemented) syscalls
  */
-#define __IGNORE_fadvise64_64		1
-#define __IGNORE_migrate_pages		1
+#define __IGNORE_fadvise64_64
+#define __IGNORE_migrate_pages
 
 #endif /* __KERNEL__ */
 #endif /* __ASM_ARM_UNISTD_H */

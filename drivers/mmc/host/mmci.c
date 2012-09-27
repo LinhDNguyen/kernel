@@ -2,13 +2,7 @@
  *  linux/drivers/mmc/host/mmci.c - ARM PrimeCell MMCI PL180/1 driver
  *
  *  Copyright (C) 2003 Deep Blue Solutions, Ltd, All Rights Reserved.
- *  Copyright (C) 2010 ST-Ericsson AB.
- *  Copyright (C) 2010 NXP Semiconductors (LPC32xx DMA modifications)
- *
- * Customization of the DMA support for LPC178x/7x:
- * (C) Copyright 2012
- * Emcraft Systems, <www.emcraft.com>
- * Alexander Potashev <aspotashev@emcraft.com>
+ *  Copyright (C) 2010 ST-Ericsson SA
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -20,278 +14,31 @@
 #include <linux/ioport.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
+#include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/highmem.h>
 #include <linux/log2.h>
 #include <linux/mmc/host.h>
+#include <linux/mmc/card.h>
 #include <linux/amba/bus.h>
 #include <linux/clk.h>
 #include <linux/scatterlist.h>
 #include <linux/gpio.h>
-#include <linux/amba/mmci.h>
 #include <linux/regulator/consumer.h>
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
+#include <linux/amba/mmci.h>
 
 #include <asm/div64.h>
 #include <asm/io.h>
 #include <asm/sizes.h>
-
-#ifdef CONFIG_LPC178X_SD_DMA
-#include <linux/dma-mapping.h>
-#include <mach/clkdev.h>
-#include <mach/dmac.h>
-#include <mach/dma.h>
-#endif /* CONFIG_LPC178X_SD_DMA */
 
 #include "mmci.h"
 
 #define DRIVER_NAME "mmci-pl18x"
 
 static unsigned int fmax = 515633;
-
-#ifdef CONFIG_LPC178X_SD_DMA
-
-#define SD_FIFO(x)			(x + 0x80)
-
-#define DMA_BUFF_SIZE SZ_64K
-
-struct LPC178X_SDDRV_DATA {
-	struct dma_config dmacfgtx;
-	struct dma_config dmacfgrx;
-	struct device *dev;
-	int lastch;
-	dma_addr_t dma_handle_tx;
-	void *dma_v_base;
-	int mapped;
-};
-static struct LPC178X_SDDRV_DATA lpc178x_drvdat;
-
-#undef MCI_IRQENABLE
-#define MCI_IRQENABLE \
-	(MCI_CMDCRCFAILMASK | MCI_DATACRCFAILMASK | MCI_CMDTIMEOUTMASK | \
-	MCI_DATATIMEOUTMASK | MCI_TXUNDERRUNMASK | MCI_RXOVERRUNMASK| \
-	MCI_CMDRESPENDMASK | MCI_CMDSENTMASK | MCI_DATAENDMASK)
-
-static int mmc_dma_setup(void)
-{
-	u32 llptrrx, llptrtx;
-	int ret = 0;
-
-	/*
-	 * There is a quirk with the LPC32XX and SD burst DMA. DMA sg
-	 * transfers where DMA is the flow controller will not transfer
-	 * the last few bytes to or from the SD card controller and
-	 * memory. For RX, the last few bytes in the SD transfer can be
-	 * forced out with a software DMA burst request. For TX, this
-	 * can't be done, so TX sg support cannot be supported. For TX,
-	 * a temporary bouncing buffer is used if more than 1 sg segment
-	 * is passed in the data request. The bouncing buffer will get a
-	 * contiguous copy of the TX data and it will be used instead.
-	 */
-
-	/* Allocate a chunk of memory for the DMA TX buffers */
-	lpc178x_drvdat.dma_v_base = dma_alloc_coherent(lpc178x_drvdat.dev,
-		DMA_BUFF_SIZE, &lpc178x_drvdat.dma_handle_tx, GFP_KERNEL);
-	if (lpc178x_drvdat.dma_v_base == NULL) {
-		dev_err(lpc178x_drvdat.dev, "error getting DMA region\n");
-		ret = -ENOMEM;
-		goto dma_no_tx_buff;
-	}
-	dev_info(lpc178x_drvdat.dev, "DMA buffer: phy:%p, virt:%p\n",
-		(void *) lpc178x_drvdat.dma_handle_tx,
-		lpc178x_drvdat.dma_v_base);
-
-	/* Setup TX DMA channel */
-	lpc178x_drvdat.dmacfgtx.ch = DMA_CH_SDCARD_TX;
-	lpc178x_drvdat.dmacfgtx.tc_inten = 0;
-	lpc178x_drvdat.dmacfgtx.err_inten = 0;
-	lpc178x_drvdat.dmacfgtx.src_size = 4;
-	lpc178x_drvdat.dmacfgtx.src_inc = 1;
-	lpc178x_drvdat.dmacfgtx.src_bsize = DMAC_CHAN_SRC_BURST_8;
-	lpc178x_drvdat.dmacfgtx.src_prph = DMAC_SRC_PERIP(DMA_PERID_SDCARD);
-	lpc178x_drvdat.dmacfgtx.dst_size = 4;
-	lpc178x_drvdat.dmacfgtx.dst_inc = 0;
-	lpc178x_drvdat.dmacfgtx.dst_bsize = DMAC_CHAN_DEST_BURST_8;
-	lpc178x_drvdat.dmacfgtx.dst_prph = DMAC_DEST_PERIP(DMA_PERID_SDCARD);
-	lpc178x_drvdat.dmacfgtx.flowctrl = DMAC_CHAN_FLOW_P_M2P;
-	if (lpc178x_dma_ch_get(
-		&lpc178x_drvdat.dmacfgtx, "dma_sd_tx", NULL, NULL) < 0)
-	{
-		dev_err(lpc178x_drvdat.dev,
-			"Error setting up SD card TX DMA channel\n");
-		ret = -ENODEV;
-		goto dma_no_txch;
-	}
-
-	/* Allocate a linked list for DMA support */
-	llptrtx = lpc178x_dma_alloc_llist(
-		lpc178x_drvdat.dmacfgtx.ch, NR_SG * 2);
-	if (llptrtx == 0) {
-		dev_err(lpc178x_drvdat.dev,
-			"Error allocating list buffer (MMC TX)\n");
-		ret = -ENOMEM;
-		goto dma_no_txlist;
-	}
-
-	/* Setup RX DMA channel */
-	lpc178x_drvdat.dmacfgrx.ch = DMA_CH_SDCARD_RX;
-	lpc178x_drvdat.dmacfgrx.tc_inten = 0;
-	lpc178x_drvdat.dmacfgrx.err_inten = 0;
-	lpc178x_drvdat.dmacfgrx.src_size = 4;
-	lpc178x_drvdat.dmacfgrx.src_inc = 0;
-	lpc178x_drvdat.dmacfgrx.src_bsize = DMAC_CHAN_SRC_BURST_8;
-	lpc178x_drvdat.dmacfgrx.src_prph = DMAC_SRC_PERIP(DMA_PERID_SDCARD);
-	lpc178x_drvdat.dmacfgrx.dst_size = 4;
-	lpc178x_drvdat.dmacfgrx.dst_inc = 1;
-	lpc178x_drvdat.dmacfgrx.dst_bsize = DMAC_CHAN_DEST_BURST_8;
-	lpc178x_drvdat.dmacfgrx.dst_prph = DMAC_DEST_PERIP(DMA_PERID_SDCARD);
-	lpc178x_drvdat.dmacfgrx.flowctrl = DMAC_CHAN_FLOW_D_P2M;
-	if (lpc178x_dma_ch_get(
-		&lpc178x_drvdat.dmacfgrx, "dma_sd_rx", NULL, NULL) < 0)
-	{
-		dev_err(lpc178x_drvdat.dev,
-			"Error setting up SD card RX DMA channel\n");
-		ret = -ENODEV;
-		goto dma_no_rxch;
-	}
-
-	/* Allocate a linked list for DMA support */
-	llptrrx = lpc178x_dma_alloc_llist(
-		lpc178x_drvdat.dmacfgrx.ch, NR_SG * 2);
-	if (llptrrx == 0) {
-		dev_err(lpc178x_drvdat.dev,
-			"Error allocating list buffer (MMC RX)\n");
-		ret = -ENOMEM;
-		goto dma_no_rxlist;
-	}
-
-	return 0;
-
-dma_no_rxlist:
-	lpc178x_dma_ch_put(lpc178x_drvdat.dmacfgrx.ch);
-	lpc178x_drvdat.dmacfgrx.ch = -1;
-dma_no_rxch:
-	lpc178x_dma_dealloc_llist(lpc178x_drvdat.dmacfgtx.ch);
-dma_no_txlist:
-	lpc178x_dma_ch_put(lpc178x_drvdat.dmacfgtx.ch);
-	lpc178x_drvdat.dmacfgtx.ch = -1;
-dma_no_txch:
-	dma_free_coherent(lpc178x_drvdat.dev, DMA_BUFF_SIZE,
-		lpc178x_drvdat.dma_v_base, lpc178x_drvdat.dma_handle_tx);
-dma_no_tx_buff:
-	return ret;
-}
-
-static void mmc_dma_dealloc(void)
-{
-	lpc178x_dma_dealloc_llist(lpc178x_drvdat.dmacfgrx.ch);
-	lpc178x_dma_ch_put(lpc178x_drvdat.dmacfgrx.ch);
-	lpc178x_drvdat.dmacfgrx.ch = -1;
-	lpc178x_dma_dealloc_llist(lpc178x_drvdat.dmacfgtx.ch);
-	lpc178x_dma_ch_put(lpc178x_drvdat.dmacfgtx.ch);
-	lpc178x_drvdat.dmacfgtx.ch = -1;
-	dma_free_coherent(lpc178x_drvdat.dev, DMA_BUFF_SIZE,
-		lpc178x_drvdat.dma_v_base, lpc178x_drvdat.dma_handle_tx);
-}
-
-/* Supports scatter/gather */
-static void mmc_dma_rx_start(struct mmci_host *host)
-{
-	unsigned int len;
-	int i, dma_len;
-	struct scatterlist *sg;
-	struct mmc_request *mrq = host->mrq;
-	struct mmc_data *reqdata = mrq->data;
-	void *dmaaddr;
-	u32 dmalen, dmaxferlen;
-
-	sg = reqdata->sg;
-	len = reqdata->sg_len;
-
-	dma_len = dma_map_sg(
-		mmc_dev(host->mmc), reqdata->sg, reqdata->sg_len,
-		DMA_FROM_DEVICE);
-	if (dma_len == 0)
-		return;
-
-	/* Setup transfer */
-	for (i = 0; i < len; i++) {
-		dmalen = (u32) sg_dma_len(&sg[i]);
-		dmaaddr = (void *) sg_dma_address(&sg[i]);
-
-		/* Build a list with a max size if 15872 bytes per seg */
-		while (dmalen > 0) {
-			dmaxferlen = dmalen;
-			if (dmaxferlen > 15872)
-				dmaxferlen = 15872;
-
-			lpc178x_dma_queue_llist_entry(lpc178x_drvdat.lastch,
-				(void *) SD_FIFO((u32)host->base),
-				dmaaddr, dmaxferlen);
-
-				dmaaddr += dmaxferlen;
-				dmalen -= dmaxferlen;
-		}
-	}
-}
-
-/* May need to reorganize buffer for scatter/gather */
-static void mmc_dma_tx_start(struct mmci_host *host)
-{
-	unsigned int len;
-	int dma_len;
-	struct scatterlist *sg;
-	struct mmc_request *mrq = host->mrq;
-	struct mmc_data *reqdata = mrq->data;
-	struct sg_mapping_iter *sg_miter = &host->sg_miter;
-	void *dmaaddr;
-	char *src_buffer, *dst_buffer;
-	unsigned long flags;
-
-	local_irq_save(flags);
-
-	sg = reqdata->sg;
-	len = reqdata->sg_len;
-
-	/* Only 1 segment? */
-	if (len == 1) {
-		dma_len = dma_map_sg(mmc_dev(host->mmc), reqdata->sg,
-			reqdata->sg_len, DMA_TO_DEVICE);
-		if (dma_len == 0)
-			return;
-
-		dmaaddr = (void *) sg_dma_address(&sg[0]);
-		lpc178x_drvdat.mapped = 1;
-	}
-	else {
-		/* Move data to contiguous buffer first, then transfer it */
-		dst_buffer = (char *) lpc178x_drvdat.dma_v_base;
-		do
-		{
-			if (!sg_miter_next(sg_miter))
-				break;
-
-			/*
-			 * Map the current scatter buffer, copy data, and unmap
-			 */
-			src_buffer = sg_miter->addr;
-			memcpy(dst_buffer, src_buffer, sg_miter->length);
-			dst_buffer += sg_miter->length;
-		} while (1);
-
-		sg_miter_stop(sg_miter);
-
-		lpc178x_drvdat.mapped = 0;
-		dmaaddr = (void *) lpc178x_drvdat.dma_handle_tx;
-	}
-
-	lpc178x_dma_start_pflow_xfer(DMA_CH_SDCARD_TX, dmaaddr,
-		(void *) SD_FIFO((u32)host->base), 1);
-
-	local_irq_restore(flags);
-}
-
-#endif /* CONFIG_LPC178X_SD_DMA */
 
 /**
  * struct variant_data - MMCI variant-specific quirks
@@ -302,6 +49,9 @@ static void mmc_dma_tx_start(struct mmci_host *host)
  *	      is asserted (likewise for RX)
  * @fifohalfsize: number of bytes that can be written when MCI_TXFIFOHALFEMPTY
  *		  is asserted (likewise for RX)
+ * @sdio: variant supports SDIO
+ * @st_clkdiv: true if using a ST-specific clock divider algorithm
+ * @blksz_datactrl16: true if Block size is at b16..b30 position in datactrl register
  */
 struct variant_data {
 	unsigned int		clkreg;
@@ -309,6 +59,9 @@ struct variant_data {
 	unsigned int		datalength_bits;
 	unsigned int		fifosize;
 	unsigned int		fifohalfsize;
+	bool			sdio;
+	bool			st_clkdiv;
+	bool			blksz_datactrl16;
 };
 
 static struct variant_data variant_arm = {
@@ -317,20 +70,41 @@ static struct variant_data variant_arm = {
 	.datalength_bits	= 16,
 };
 
+static struct variant_data variant_arm_extended_fifo = {
+	.fifosize		= 128 * 4,
+	.fifohalfsize		= 64 * 4,
+	.datalength_bits	= 16,
+};
+
 static struct variant_data variant_u300 = {
 	.fifosize		= 16 * 4,
 	.fifohalfsize		= 8 * 4,
-	.clkreg_enable		= 1 << 13, /* HWFCEN */
+	.clkreg_enable		= MCI_ST_U300_HWFCEN,
 	.datalength_bits	= 16,
+	.sdio			= true,
 };
 
 static struct variant_data variant_ux500 = {
 	.fifosize		= 30 * 4,
 	.fifohalfsize		= 8 * 4,
 	.clkreg			= MCI_CLK_ENABLE,
-	.clkreg_enable		= 1 << 14, /* HWFCEN */
+	.clkreg_enable		= MCI_ST_UX500_HWFCEN,
 	.datalength_bits	= 24,
+	.sdio			= true,
+	.st_clkdiv		= true,
 };
+
+static struct variant_data variant_ux500v2 = {
+	.fifosize		= 30 * 4,
+	.fifohalfsize		= 8 * 4,
+	.clkreg			= MCI_CLK_ENABLE,
+	.clkreg_enable		= MCI_ST_UX500_HWFCEN,
+	.datalength_bits	= 24,
+	.sdio			= true,
+	.st_clkdiv		= true,
+	.blksz_datactrl16	= true,
+};
+
 /*
  * This must be called with host->lock held
  */
@@ -342,8 +116,25 @@ static void mmci_set_clkreg(struct mmci_host *host, unsigned int desired)
 	if (desired) {
 		if (desired >= host->mclk) {
 			clk = MCI_CLK_BYPASS;
+			if (variant->st_clkdiv)
+				clk |= MCI_ST_UX500_NEG_EDGE;
 			host->cclk = host->mclk;
+		} else if (variant->st_clkdiv) {
+			/*
+			 * DB8500 TRM says f = mclk / (clkdiv + 2)
+			 * => clkdiv = (mclk / f) - 2
+			 * Round the divider up so we don't exceed the max
+			 * frequency
+			 */
+			clk = DIV_ROUND_UP(host->mclk, desired) - 2;
+			if (clk >= 256)
+				clk = 255;
+			host->cclk = host->mclk / (clk + 2);
 		} else {
+			/*
+			 * PL180 TRM says f = mclk / (2 * (clkdiv + 1))
+			 * => clkdiv = mclk / (2 * f) - 1
+			 */
 			clk = host->mclk / (2 * desired) - 1;
 			if (clk >= 256)
 				clk = 255;
@@ -373,9 +164,6 @@ mmci_request_end(struct mmci_host *host, struct mmc_request *mrq)
 
 	host->mrq = NULL;
 	host->cmd = NULL;
-
-	if (mrq->data)
-		mrq->data->bytes_xfered = host->data_xfered;
 
 	/*
 	 * Need to drop the host lock here; mmc_request_done may call
@@ -421,12 +209,368 @@ static void mmci_init_sg(struct mmci_host *host, struct mmc_data *data)
 	sg_miter_start(&host->sg_miter, data->sg, data->sg_len, flags);
 }
 
+/*
+ * All the DMA operation mode stuff goes inside this ifdef.
+ * This assumes that you have a generic DMA device interface,
+ * no custom DMA interfaces are supported.
+ */
+#ifdef CONFIG_DMA_ENGINE
+static void __devinit mmci_dma_setup(struct mmci_host *host)
+{
+	struct mmci_platform_data *plat = host->plat;
+	const char *rxname, *txname;
+	dma_cap_mask_t mask;
+
+	if (!plat || !plat->dma_filter) {
+		dev_info(mmc_dev(host->mmc), "no DMA platform data\n");
+		return;
+	}
+
+	/* initialize pre request cookie */
+	host->next_data.cookie = 1;
+
+	/* Try to acquire a generic DMA engine slave channel */
+	dma_cap_zero(mask);
+	dma_cap_set(DMA_SLAVE, mask);
+
+	/*
+	 * If only an RX channel is specified, the driver will
+	 * attempt to use it bidirectionally, however if it is
+	 * is specified but cannot be located, DMA will be disabled.
+	 */
+	if (plat->dma_rx_param) {
+		host->dma_rx_channel = dma_request_channel(mask,
+							   plat->dma_filter,
+							   plat->dma_rx_param);
+		/* E.g if no DMA hardware is present */
+		if (!host->dma_rx_channel)
+			dev_err(mmc_dev(host->mmc), "no RX DMA channel\n");
+	}
+
+	if (plat->dma_tx_param) {
+		host->dma_tx_channel = dma_request_channel(mask,
+							   plat->dma_filter,
+							   plat->dma_tx_param);
+		if (!host->dma_tx_channel)
+			dev_warn(mmc_dev(host->mmc), "no TX DMA channel\n");
+	} else {
+		host->dma_tx_channel = host->dma_rx_channel;
+	}
+
+	if (host->dma_rx_channel)
+		rxname = dma_chan_name(host->dma_rx_channel);
+	else
+		rxname = "none";
+
+	if (host->dma_tx_channel)
+		txname = dma_chan_name(host->dma_tx_channel);
+	else
+		txname = "none";
+
+	dev_info(mmc_dev(host->mmc), "DMA channels RX %s, TX %s\n",
+		 rxname, txname);
+
+	/*
+	 * Limit the maximum segment size in any SG entry according to
+	 * the parameters of the DMA engine device.
+	 */
+	if (host->dma_tx_channel) {
+		struct device *dev = host->dma_tx_channel->device->dev;
+		unsigned int max_seg_size = dma_get_max_seg_size(dev);
+
+		if (max_seg_size < host->mmc->max_seg_size)
+			host->mmc->max_seg_size = max_seg_size;
+	}
+	if (host->dma_rx_channel) {
+		struct device *dev = host->dma_rx_channel->device->dev;
+		unsigned int max_seg_size = dma_get_max_seg_size(dev);
+
+		if (max_seg_size < host->mmc->max_seg_size)
+			host->mmc->max_seg_size = max_seg_size;
+	}
+}
+
+/*
+ * This is used in __devinit or __devexit so inline it
+ * so it can be discarded.
+ */
+static inline void mmci_dma_release(struct mmci_host *host)
+{
+	struct mmci_platform_data *plat = host->plat;
+
+	if (host->dma_rx_channel)
+		dma_release_channel(host->dma_rx_channel);
+	if (host->dma_tx_channel && plat->dma_tx_param)
+		dma_release_channel(host->dma_tx_channel);
+	host->dma_rx_channel = host->dma_tx_channel = NULL;
+}
+
+static void mmci_dma_unmap(struct mmci_host *host, struct mmc_data *data)
+{
+	struct dma_chan *chan = host->dma_current;
+	enum dma_data_direction dir;
+	u32 status;
+	int i;
+
+	/* Wait up to 1ms for the DMA to complete */
+	for (i = 0; ; i++) {
+		status = readl(host->base + MMCISTATUS);
+		if (!(status & MCI_RXDATAAVLBLMASK) || i >= 100)
+			break;
+		udelay(10);
+	}
+
+	/*
+	 * Check to see whether we still have some data left in the FIFO -
+	 * this catches DMA controllers which are unable to monitor the
+	 * DMALBREQ and DMALSREQ signals while allowing us to DMA to non-
+	 * contiguous buffers.  On TX, we'll get a FIFO underrun error.
+	 */
+	if (status & MCI_RXDATAAVLBLMASK) {
+		dmaengine_terminate_all(chan);
+		if (!data->error)
+			data->error = -EIO;
+	}
+
+	if (data->flags & MMC_DATA_WRITE) {
+		dir = DMA_TO_DEVICE;
+	} else {
+		dir = DMA_FROM_DEVICE;
+	}
+
+	if (!data->host_cookie)
+		dma_unmap_sg(chan->device->dev, data->sg, data->sg_len, dir);
+
+	/*
+	 * Use of DMA with scatter-gather is impossible.
+	 * Give up with DMA and switch back to PIO mode.
+	 */
+	if (status & MCI_RXDATAAVLBLMASK) {
+		dev_err(mmc_dev(host->mmc), "buggy DMA detected. Taking evasive action.\n");
+		mmci_dma_release(host);
+	}
+}
+
+static void mmci_dma_data_error(struct mmci_host *host)
+{
+	dev_err(mmc_dev(host->mmc), "error during DMA transfer!\n");
+	dmaengine_terminate_all(host->dma_current);
+}
+
+static int mmci_dma_prep_data(struct mmci_host *host, struct mmc_data *data,
+			      struct mmci_host_next *next)
+{
+	struct variant_data *variant = host->variant;
+	struct dma_slave_config conf = {
+		.src_addr = host->phybase + MMCIFIFO,
+		.dst_addr = host->phybase + MMCIFIFO,
+		.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES,
+		.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES,
+		.src_maxburst = variant->fifohalfsize >> 2, /* # of words */
+		.dst_maxburst = variant->fifohalfsize >> 2, /* # of words */
+	};
+	struct dma_chan *chan;
+	struct dma_device *device;
+	struct dma_async_tx_descriptor *desc;
+	int nr_sg;
+
+	/* Check if next job is already prepared */
+	if (data->host_cookie && !next &&
+	    host->dma_current && host->dma_desc_current)
+		return 0;
+
+	if (!next) {
+		host->dma_current = NULL;
+		host->dma_desc_current = NULL;
+	}
+
+	if (data->flags & MMC_DATA_READ) {
+		conf.direction = DMA_FROM_DEVICE;
+		chan = host->dma_rx_channel;
+	} else {
+		conf.direction = DMA_TO_DEVICE;
+		chan = host->dma_tx_channel;
+	}
+
+	/* If there's no DMA channel, fall back to PIO */
+	if (!chan)
+		return -EINVAL;
+
+	/* If less than or equal to the fifo size, don't bother with DMA */
+	if (data->blksz * data->blocks <= variant->fifosize)
+		return -EINVAL;
+
+	device = chan->device;
+	nr_sg = dma_map_sg(device->dev, data->sg, data->sg_len, conf.direction);
+	if (nr_sg == 0)
+		return -EINVAL;
+
+	dmaengine_slave_config(chan, &conf);
+	desc = device->device_prep_slave_sg(chan, data->sg, nr_sg,
+					    conf.direction, DMA_CTRL_ACK);
+	if (!desc)
+		goto unmap_exit;
+
+	if (next) {
+		next->dma_chan = chan;
+		next->dma_desc = desc;
+	} else {
+		host->dma_current = chan;
+		host->dma_desc_current = desc;
+	}
+
+	return 0;
+
+ unmap_exit:
+	if (!next)
+		dmaengine_terminate_all(chan);
+	dma_unmap_sg(device->dev, data->sg, data->sg_len, conf.direction);
+	return -ENOMEM;
+}
+
+static int mmci_dma_start_data(struct mmci_host *host, unsigned int datactrl)
+{
+	int ret;
+	struct mmc_data *data = host->data;
+
+	ret = mmci_dma_prep_data(host, host->data, NULL);
+	if (ret)
+		return ret;
+
+	/* Okay, go for it. */
+	dev_vdbg(mmc_dev(host->mmc),
+		 "Submit MMCI DMA job, sglen %d blksz %04x blks %04x flags %08x\n",
+		 data->sg_len, data->blksz, data->blocks, data->flags);
+	dmaengine_submit(host->dma_desc_current);
+	dma_async_issue_pending(host->dma_current);
+
+	datactrl |= MCI_DPSM_DMAENABLE;
+
+	/* Trigger the DMA transfer */
+	writel(datactrl, host->base + MMCIDATACTRL);
+
+	/*
+	 * Let the MMCI say when the data is ended and it's time
+	 * to fire next DMA request. When that happens, MMCI will
+	 * call mmci_data_end()
+	 */
+	writel(readl(host->base + MMCIMASK0) | MCI_DATAENDMASK,
+	       host->base + MMCIMASK0);
+	return 0;
+}
+
+static void mmci_get_next_data(struct mmci_host *host, struct mmc_data *data)
+{
+	struct mmci_host_next *next = &host->next_data;
+
+	if (data->host_cookie && data->host_cookie != next->cookie) {
+		printk(KERN_WARNING "[%s] invalid cookie: data->host_cookie %d"
+		       " host->next_data.cookie %d\n",
+		       __func__, data->host_cookie, host->next_data.cookie);
+		data->host_cookie = 0;
+	}
+
+	if (!data->host_cookie)
+		return;
+
+	host->dma_desc_current = next->dma_desc;
+	host->dma_current = next->dma_chan;
+
+	next->dma_desc = NULL;
+	next->dma_chan = NULL;
+}
+
+static void mmci_pre_request(struct mmc_host *mmc, struct mmc_request *mrq,
+			     bool is_first_req)
+{
+	struct mmci_host *host = mmc_priv(mmc);
+	struct mmc_data *data = mrq->data;
+	struct mmci_host_next *nd = &host->next_data;
+
+	if (!data)
+		return;
+
+	if (data->host_cookie) {
+		data->host_cookie = 0;
+		return;
+	}
+
+	/* if config for dma */
+	if (((data->flags & MMC_DATA_WRITE) && host->dma_tx_channel) ||
+	    ((data->flags & MMC_DATA_READ) && host->dma_rx_channel)) {
+		if (mmci_dma_prep_data(host, data, nd))
+			data->host_cookie = 0;
+		else
+			data->host_cookie = ++nd->cookie < 0 ? 1 : nd->cookie;
+	}
+}
+
+static void mmci_post_request(struct mmc_host *mmc, struct mmc_request *mrq,
+			      int err)
+{
+	struct mmci_host *host = mmc_priv(mmc);
+	struct mmc_data *data = mrq->data;
+	struct dma_chan *chan;
+	enum dma_data_direction dir;
+
+	if (!data)
+		return;
+
+	if (data->flags & MMC_DATA_READ) {
+		dir = DMA_FROM_DEVICE;
+		chan = host->dma_rx_channel;
+	} else {
+		dir = DMA_TO_DEVICE;
+		chan = host->dma_tx_channel;
+	}
+
+
+	/* if config for dma */
+	if (chan) {
+		if (err)
+			dmaengine_terminate_all(chan);
+		if (err || data->host_cookie)
+			dma_unmap_sg(mmc_dev(host->mmc), data->sg,
+				     data->sg_len, dir);
+		mrq->data->host_cookie = 0;
+	}
+}
+
+#else
+/* Blank functions if the DMA engine is not available */
+static void mmci_get_next_data(struct mmci_host *host, struct mmc_data *data)
+{
+}
+static inline void mmci_dma_setup(struct mmci_host *host)
+{
+}
+
+static inline void mmci_dma_release(struct mmci_host *host)
+{
+}
+
+static inline void mmci_dma_unmap(struct mmci_host *host, struct mmc_data *data)
+{
+}
+
+static inline void mmci_dma_data_error(struct mmci_host *host)
+{
+}
+
+static inline int mmci_dma_start_data(struct mmci_host *host, unsigned int datactrl)
+{
+	return -ENOSYS;
+}
+
+#define mmci_pre_request NULL
+#define mmci_post_request NULL
+
+#endif
+
 static void mmci_start_data(struct mmci_host *host, struct mmc_data *data)
 {
-#ifndef CONFIG_LPC178X_SD_DMA
 	struct variant_data *variant = host->variant;
-#endif /* !CONFIG_LPC178X_SD_DMA */
-	unsigned int datactrl, timeout, irqmask = 0;
+	unsigned int datactrl, timeout, irqmask;
 	unsigned long long clks;
 	void __iomem *base;
 	int blksz_bits;
@@ -435,10 +579,8 @@ static void mmci_start_data(struct mmci_host *host, struct mmc_data *data)
 		data->blksz, data->blocks, data->flags);
 
 	host->data = data;
-	host->size = data->blksz;
-	host->data_xfered = 0;
-
-	mmci_init_sg(host, data);
+	host->size = data->blksz * data->blocks;
+	data->bytes_xfered = 0;
 
 	clks = (unsigned long long)data->timeout_ns * host->cclk;
 	do_div(clks, 1000000000UL);
@@ -447,36 +589,38 @@ static void mmci_start_data(struct mmci_host *host, struct mmc_data *data)
 
 	base = host->base;
 	writel(timeout, base + MMCIDATATIMER);
-#ifdef CONFIG_LPC178X_SD_DMA
-	writel((host->size * data->blocks), base + MMCIDATALENGTH);
-#else
 	writel(host->size, base + MMCIDATALENGTH);
-#endif /* CONFIG_LPC178X_SD_DMA */
 
 	blksz_bits = ffs(data->blksz) - 1;
 	BUG_ON(1 << blksz_bits != data->blksz);
 
-#ifdef CONFIG_LPC178X_SD_DMA
-	datactrl = MCI_DPSM_ENABLE | MCI_DPSM_DMAENABLE | blksz_bits << 4;
-	if (data->flags & MMC_DATA_READ) {
+	if (variant->blksz_datactrl16)
+		datactrl = MCI_DPSM_ENABLE | (data->blksz << 16);
+	else
+		datactrl = MCI_DPSM_ENABLE | blksz_bits << 4;
+
+	if (data->flags & MMC_DATA_READ)
 		datactrl |= MCI_DPSM_DIRECTION;
-		lpc178x_drvdat.lastch = DMA_CH_SDCARD_RX;
-		mmc_dma_rx_start(host);
-	} else {
-		lpc178x_drvdat.lastch = DMA_CH_SDCARD_TX;
-		mmc_dma_tx_start(host);
-	}
-#else
-	datactrl = MCI_DPSM_ENABLE | blksz_bits << 4;
+
+	/*
+	 * Attempt to use DMA operation mode, if this
+	 * should fail, fall back to PIO mode
+	 */
+	if (!mmci_dma_start_data(host, datactrl))
+		return;
+
+	/* IRQ mode, map the SG list for CPU reading/writing */
+	mmci_init_sg(host, data);
+
 	if (data->flags & MMC_DATA_READ) {
-		datactrl |= MCI_DPSM_DIRECTION;
 		irqmask = MCI_RXFIFOHALFFULLMASK;
 
 		/*
-		 * If we have less than a FIFOSIZE of bytes to transfer,
-		 * trigger a PIO interrupt as soon as any data is available.
+		 * If we have less than the fifo 'half-full' threshold to
+		 * transfer, trigger a PIO interrupt as soon as any data
+		 * is available.
 		 */
-		if (host->size < variant->fifosize)
+		if (host->size < variant->fifohalfsize)
 			irqmask |= MCI_RXDATAAVLBLMASK;
 	} else {
 		/*
@@ -485,16 +629,14 @@ static void mmci_start_data(struct mmci_host *host, struct mmc_data *data)
 		 */
 		irqmask = MCI_TXFIFOHALFEMPTYMASK;
 	}
-#endif /* CONFIG_LPC178X_SD_DMA */
+
+	/* The ST Micro variants has a special bit to enable SDIO */
+	if (variant->sdio && host->mmc->card)
+		if (mmc_card_sdio(host->mmc->card))
+			datactrl |= MCI_ST_DPSM_SDIOEN;
 
 	writel(datactrl, base + MMCIDATACTRL);
-#ifdef CONFIG_LPC178X_SD_DMA
-	datactrl = readl(base + MMCIMASK0) & ~MCI_DATABLOCKENDMASK;
-	writel(datactrl | MCI_DATAENDMASK, base + MMCIMASK0);
-#else
 	writel(readl(base + MMCIMASK0) & ~MCI_DATAENDMASK, base + MMCIMASK0);
-#endif /* CONFIG_LPC178X_SD_DMA */
-
 	mmci_set_mask1(host, irqmask);
 }
 
@@ -530,60 +672,58 @@ static void
 mmci_data_irq(struct mmci_host *host, struct mmc_data *data,
 	      unsigned int status)
 {
-#ifdef CONFIG_LPC178X_SD_DMA
-	if (status & MCI_DATAEND) {
-		host->data_xfered += data->blksz * data->blocks;
-	}
-#else
-	if (status & MCI_DATABLOCKEND) {
-		host->data_xfered += data->blksz;
-	}
-#endif /* CONFIG_LPC178X_SD_DMA */
+	/* First check for errors */
+	if (status & (MCI_DATACRCFAIL|MCI_DATATIMEOUT|MCI_STARTBITERR|
+		      MCI_TXUNDERRUN|MCI_RXOVERRUN)) {
+		u32 remain, success;
 
-	if (status & (MCI_DATACRCFAIL|MCI_DATATIMEOUT|MCI_TXUNDERRUN|MCI_RXOVERRUN)) {
-		dev_dbg(mmc_dev(host->mmc), "MCI ERROR IRQ (status %08x)\n", status);
-		if (status & MCI_DATACRCFAIL)
-			data->error = -EILSEQ;
-		else if (status & MCI_DATATIMEOUT)
-			data->error = -ETIMEDOUT;
-		else if (status & (MCI_TXUNDERRUN|MCI_RXOVERRUN))
-			data->error = -EIO;
-		status |= MCI_DATAEND;
+		/* Terminate the DMA transfer */
+		if (dma_inprogress(host))
+			mmci_dma_data_error(host);
 
 		/*
-		 * We hit an error condition.  Ensure that any data
-		 * partially written to a page is properly coherent.
+		 * Calculate how far we are into the transfer.  Note that
+		 * the data counter gives the number of bytes transferred
+		 * on the MMC bus, not on the host side.  On reads, this
+		 * can be as much as a FIFO-worth of data ahead.  This
+		 * matters for FIFO overruns only.
 		 */
-		if (data->flags & MMC_DATA_READ) {
-			struct sg_mapping_iter *sg_miter = &host->sg_miter;
-			unsigned long flags;
+		remain = readl(host->base + MMCIDATACNT);
+		success = data->blksz * data->blocks - remain;
 
-			local_irq_save(flags);
-			if (sg_miter_next(sg_miter)) {
-				flush_dcache_page(sg_miter->page);
-				sg_miter_stop(sg_miter);
-			}
-			local_irq_restore(flags);
+		dev_dbg(mmc_dev(host->mmc), "MCI ERROR IRQ, status 0x%08x at 0x%08x\n",
+			status, success);
+		if (status & MCI_DATACRCFAIL) {
+			/* Last block was not successful */
+			success -= 1;
+			data->error = -EILSEQ;
+		} else if (status & MCI_DATATIMEOUT) {
+			data->error = -ETIMEDOUT;
+		} else if (status & MCI_STARTBITERR) {
+			data->error = -ECOMM;
+		} else if (status & MCI_TXUNDERRUN) {
+			data->error = -EIO;
+		} else if (status & MCI_RXOVERRUN) {
+			if (success > host->variant->fifosize)
+				success -= host->variant->fifosize;
+			else
+				success = 0;
+			data->error = -EIO;
 		}
+		data->bytes_xfered = round_down(success, data->blksz);
 	}
 
-	if (status & MCI_DATAEND) {
-#ifdef CONFIG_LPC178X_SD_DMA
-		if (data->flags & MMC_DATA_READ) {
-			lpc178x_dma_force_burst(lpc178x_drvdat.lastch,
-				DMA_PERID_SDCARD);
-			lpc178x_dma_flush_llist(lpc178x_drvdat.lastch);
-			dma_unmap_sg(mmc_dev(host->mmc),
-				data->sg, data->sg_len, DMA_FROM_DEVICE);
-		} else {
-			lpc178x_dma_ch_disable(lpc178x_drvdat.lastch);
-			if (lpc178x_drvdat.mapped)
-				dma_unmap_sg(mmc_dev(host->mmc), data->sg,
-					data->sg_len, DMA_TO_DEVICE);
-		}
-#endif /* CONFIG_LPC178X_SD_DMA */
+	if (status & MCI_DATABLOCKEND)
+		dev_err(mmc_dev(host->mmc), "stray MCI_DATABLOCKEND interrupt\n");
 
+	if (status & MCI_DATAEND || data->error) {
+		if (dma_inprogress(host))
+			mmci_dma_unmap(host, data);
 		mmci_stop_data(host);
+
+		if (!data->error)
+			/* The error clause is handled above, success! */
+			data->bytes_xfered = data->blksz * data->blocks;
 
 		if (!data->stop) {
 			mmci_request_end(host, data->mrq);
@@ -601,20 +741,24 @@ mmci_cmd_irq(struct mmci_host *host, struct mmc_command *cmd,
 
 	host->cmd = NULL;
 
-	cmd->resp[0] = readl(base + MMCIRESPONSE0);
-	cmd->resp[1] = readl(base + MMCIRESPONSE1);
-	cmd->resp[2] = readl(base + MMCIRESPONSE2);
-	cmd->resp[3] = readl(base + MMCIRESPONSE3);
-
 	if (status & MCI_CMDTIMEOUT) {
 		cmd->error = -ETIMEDOUT;
 	} else if (status & MCI_CMDCRCFAIL && cmd->flags & MMC_RSP_CRC) {
 		cmd->error = -EILSEQ;
+	} else {
+		cmd->resp[0] = readl(base + MMCIRESPONSE0);
+		cmd->resp[1] = readl(base + MMCIRESPONSE1);
+		cmd->resp[2] = readl(base + MMCIRESPONSE2);
+		cmd->resp[3] = readl(base + MMCIRESPONSE3);
 	}
 
 	if (!cmd->data || cmd->error) {
-		if (host->data)
+		if (host->data) {
+			/* Terminate the DMA transfer */
+			if (dma_inprogress(host))
+				mmci_dma_data_error(host);
 			mmci_stop_data(host);
+		}
 		mmci_request_end(host, cmd->mrq);
 	} else if (!(cmd->data->flags & MMC_DATA_READ)) {
 		mmci_start_data(host, cmd->data);
@@ -665,7 +809,32 @@ static int mmci_pio_write(struct mmci_host *host, char *buffer, unsigned int rem
 			 variant->fifosize : variant->fifohalfsize;
 		count = min(remain, maxcnt);
 
-		writesl(base + MMCIFIFO, ptr, count >> 2);
+		/*
+		 * The ST Micro variant for SDIO transfer sizes
+		 * less then 8 bytes should have clock H/W flow
+		 * control disabled.
+		 */
+		if (variant->sdio &&
+		    mmc_card_sdio(host->mmc->card)) {
+			if (count < 8)
+				writel(readl(host->base + MMCICLOCK) &
+					~variant->clkreg_enable,
+					host->base + MMCICLOCK);
+			else
+				writel(readl(host->base + MMCICLOCK) |
+					variant->clkreg_enable,
+					host->base + MMCICLOCK);
+		}
+
+		/*
+		 * SDIO especially may want to send something that is
+		 * not divisible by 4 (as opposed to card sectors
+		 * etc), and the FIFO only accept full 32-bit writes.
+		 * So compensate by adding +3 on the count, a single
+		 * byte become a 32bit write, 7 bytes will be two
+		 * 32bit writes etc.
+		 */
+		writesl(base + MMCIFIFO, ptr, (count + 3) >> 2);
 
 		ptr += count;
 		remain -= count;
@@ -731,9 +900,6 @@ static irqreturn_t mmci_pio_irq(int irq, void *dev_id)
 		if (remain)
 			break;
 
-		if (status & MCI_RXACTIVE)
-			flush_dcache_page(sg_miter->page);
-
 		status = readl(base + MMCISTATUS);
 	} while (1);
 
@@ -742,10 +908,10 @@ static irqreturn_t mmci_pio_irq(int irq, void *dev_id)
 	local_irq_restore(flags);
 
 	/*
-	 * If we're nearing the end of the read, switch to
-	 * "any data available" mode.
+	 * If we have less than the fifo 'half-full' threshold to transfer,
+	 * trigger a PIO interrupt as soon as any data is available.
 	 */
-	if (status & MCI_RXACTIVE && host->size < variant->fifosize)
+	if (status & MCI_RXACTIVE && host->size < variant->fifohalfsize)
 		mmci_set_mask1(host, MCI_RXDATAAVLBLMASK);
 
 	/*
@@ -787,17 +953,14 @@ static irqreturn_t mmci_irq(int irq, void *dev_id)
 		}
 
 		status &= readl(host->base + MMCIMASK0);
-#ifdef CONFIG_LPC178X_SD_DMA
-		writel((status | MCI_DATABLOCKEND), host->base + MMCICLEAR);
-#else
 		writel(status, host->base + MMCICLEAR);
-#endif /* CONFIG_LPC178X_SD_DMA */
 
 		dev_dbg(mmc_dev(host->mmc), "irq0 (data+cmd) %08x\n", status);
 
 		data = host->data;
-		if (status & (MCI_DATACRCFAIL|MCI_DATATIMEOUT|MCI_TXUNDERRUN|
-			      MCI_RXOVERRUN|MCI_DATAEND|MCI_DATABLOCKEND) && data)
+		if (status & (MCI_DATACRCFAIL|MCI_DATATIMEOUT|MCI_STARTBITERR|
+			      MCI_TXUNDERRUN|MCI_RXOVERRUN|MCI_DATAEND|
+			      MCI_DATABLOCKEND) && data)
 			mmci_data_irq(host, data, status);
 
 		cmd = host->cmd;
@@ -831,6 +994,9 @@ static void mmci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 	host->mrq = mrq;
 
+	if (mrq->data)
+		mmci_get_next_data(host, mrq->data);
+
 	if (mrq->data && mrq->data->flags & MMC_DATA_READ)
 		mmci_start_data(host, mrq->data);
 
@@ -844,29 +1010,30 @@ static void mmci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	struct mmci_host *host = mmc_priv(mmc);
 	u32 pwr = 0;
 	unsigned long flags;
+	int ret;
 
 	switch (ios->power_mode) {
 	case MMC_POWER_OFF:
-		if(host->vcc &&
-		   regulator_is_enabled(host->vcc))
-			regulator_disable(host->vcc);
+		if (host->vcc)
+			ret = mmc_regulator_set_ocr(mmc, host->vcc, 0);
 		break;
 	case MMC_POWER_UP:
-#ifdef CONFIG_REGULATOR
-		if (host->vcc)
-			/* This implicitly enables the regulator */
-			mmc_regulator_set_ocr(host->vcc, ios->vdd);
-#endif
-		/*
-		 * The translate_vdd function is not used if you have
-		 * an external regulator, or your design is really weird.
-		 * Using it would mean sending in power control BOTH using
-		 * a regulator AND the 4 MMCIPWR bits. If we don't have
-		 * a regulator, we might have some other platform specific
-		 * power control behind this translate function.
-		 */
-		if (!host->vcc && host->plat->translate_vdd)
-			pwr |= host->plat->translate_vdd(mmc_dev(mmc), ios->vdd);
+		if (host->vcc) {
+			ret = mmc_regulator_set_ocr(mmc, host->vcc, ios->vdd);
+			if (ret) {
+				dev_err(mmc_dev(mmc), "unable to set OCR\n");
+				/*
+				 * The .set_ios() function in the mmc_host_ops
+				 * struct return void, and failing to set the
+				 * power should be rare so we print an error
+				 * and return here.
+				 */
+				return;
+			}
+		}
+		if (host->plat->vdd_handler)
+			pwr |= host->plat->vdd_handler(mmc_dev(mmc), ios->vdd,
+						       ios->power_mode);
 		/* The ST version does not have this, fall through to POWER_ON */
 		if (host->hw_designer != AMBA_VENDOR_ST) {
 			pwr |= MCI_PWR_UP;
@@ -908,20 +1075,29 @@ static int mmci_get_ro(struct mmc_host *mmc)
 	if (host->gpio_wp == -ENOSYS)
 		return -ENOSYS;
 
-	return gpio_get_value(host->gpio_wp);
+	return gpio_get_value_cansleep(host->gpio_wp);
 }
 
 static int mmci_get_cd(struct mmc_host *mmc)
 {
 	struct mmci_host *host = mmc_priv(mmc);
+	struct mmci_platform_data *plat = host->plat;
 	unsigned int status;
 
-	if (host->gpio_cd == -ENOSYS)
-		status = host->plat->status(mmc_dev(host->mmc));
-	else
-		status = gpio_get_value(host->gpio_cd);
+	if (host->gpio_cd == -ENOSYS) {
+		if (!plat->status)
+			return 1; /* Assume always present */
 
-	return !status;
+		status = plat->status(mmc_dev(host->mmc));
+	} else
+		status = !!gpio_get_value_cansleep(host->gpio_cd)
+			^ plat->cd_invert;
+
+	/*
+	 * Use positive logic throughout - status is zero for no card,
+	 * non-zero for card inserted.
+	 */
+	return status;
 }
 
 static irqreturn_t mmci_cd_irq(int irq, void *dev_id)
@@ -935,30 +1111,20 @@ static irqreturn_t mmci_cd_irq(int irq, void *dev_id)
 
 static const struct mmc_host_ops mmci_ops = {
 	.request	= mmci_request,
+	.pre_req	= mmci_pre_request,
+	.post_req	= mmci_post_request,
 	.set_ios	= mmci_set_ios,
 	.get_ro		= mmci_get_ro,
 	.get_cd		= mmci_get_cd,
 };
 
-static void mmci_check_status(unsigned long data)
-{
-	struct mmci_host *host = (struct mmci_host *)data;
-	unsigned int status = mmci_get_cd(host->mmc);
-
-	if (status ^ host->oldstat)
-		mmc_detect_change(host->mmc, 0);
-
-	host->oldstat = status;
-	mod_timer(&host->timer, jiffies + HZ);
-}
-
-static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
+static int __devinit mmci_probe(struct amba_device *dev,
+	const struct amba_id *id)
 {
 	struct mmci_platform_data *plat = dev->dev.platform_data;
 	struct variant_data *variant = id->data;
 	struct mmci_host *host;
 	struct mmc_host *mmc;
-	unsigned int mask;
 	int ret;
 
 	/* must have platform data */
@@ -1016,6 +1182,7 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 		dev_dbg(mmc_dev(mmc), "eventual mclk rate: %u Hz\n",
 			host->mclk);
 	}
+	host->phybase = dev->res.start;
 	host->base = ioremap(dev->res.start, resource_size(&dev->res));
 	if (!host->base) {
 		ret = -ENOMEM;
@@ -1023,7 +1190,15 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 	}
 
 	mmc->ops = &mmci_ops;
-	mmc->f_min = (host->mclk + 511) / 512;
+	/*
+	 * The ARM and ST versions of the block have slightly different
+	 * clock divider equations which means that the minimum divider
+	 * differs too.
+	 */
+	if (variant->st_clkdiv)
+		mmc->f_min = DIV_ROUND_UP(host->mclk, 257);
+	else
+		mmc->f_min = DIV_ROUND_UP(host->mclk, 512);
 	/*
 	 * If the platform data supplies a maximum operating
 	 * frequency, this takes precedence. Else, we fall back
@@ -1066,8 +1241,7 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 	/*
 	 * We can do SGIO
 	 */
-	mmc->max_hw_segs = 16;
-	mmc->max_phys_segs = NR_SG;
+	mmc->max_segs = NR_SG;
 
 	/*
 	 * Since only a certain number of bits are valid in the data length
@@ -1076,20 +1250,11 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 	 */
 	mmc->max_req_size = (1 << variant->datalength_bits) - 1;
 
-#ifdef CONFIG_LPC178X_SD_DMA
-	/*
-	 * The LPC32x0 DMA controller can handle up to a 16383 byte DMA
-	 * transfer. We'll rely on the mmc core to make sure the passed
-	 * size for a request is block aligned.
-	 */
-	mmc->max_seg_size = 65535;
-#else
 	/*
 	 * Set the maximum segment size.  Since we aren't doing DMA
 	 * (yet) we are only limited by the data length register.
 	 */
 	mmc->max_seg_size = mmc->max_req_size;
-#endif /* CONFIG_LPC178X_SD_DMA */
 
 	/*
 	 * Block size can be up to 2048 bytes, but must be a power of two.
@@ -1100,15 +1265,6 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 	 * No limit on the number of blocks transferred.
 	 */
 	mmc->max_blk_count = mmc->max_req_size;
-
-#ifdef CONFIG_LPC178X_SD_DMA
-	/*
-	 * Setup DMA for the interface
-	 */
-	lpc178x_drvdat.dev = &dev->dev;
-	if (mmc_dma_setup())
-		goto err_dma_setup;
-#endif /* CONFIG_LPC178X_SD_DMA */
 
 	spin_lock_init(&host->lock);
 
@@ -1125,9 +1281,17 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 		else if (ret != -ENOSYS)
 			goto err_gpio_cd;
 
+		/*
+		 * A gpio pin that will detect cards when inserted and removed
+		 * will most likely want to trigger on the edges if it is
+		 * 0 when ejected and 1 when inserted (or mutatis mutandis
+		 * for the inverted case) so we request triggers on both
+		 * edges.
+		 */
 		ret = request_any_context_irq(gpio_to_irq(plat->gpio_cd),
-					      mmci_cd_irq, 0,
-					      DRIVER_NAME " (cd)", host);
+				mmci_cd_irq,
+				IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+				DRIVER_NAME " (cd)", host);
 		if (ret >= 0)
 			host->gpio_cd_irq = gpio_to_irq(plat->gpio_cd);
 	}
@@ -1141,7 +1305,8 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 			goto err_gpio_wp;
 	}
 
-	if (host->gpio_cd_irq < 0)
+	if ((host->plat->status || host->gpio_cd != -ENOSYS)
+	    && host->gpio_cd_irq < 0)
 		mmc->caps |= MMC_CAP_NEEDS_POLL;
 
 	ret = request_irq(dev->irq[0], mmci_irq, IRQF_SHARED, DRIVER_NAME " (cmd)", host);
@@ -1157,23 +1322,18 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 			goto irq0_free;
 	}
 
-	mask = MCI_IRQENABLE;
-	writel(mask, host->base + MMCIMASK0);
+	writel(MCI_IRQENABLE, host->base + MMCIMASK0);
 
 	amba_set_drvdata(dev, mmc);
-	host->oldstat = mmci_get_cd(host->mmc);
+
+	dev_info(&dev->dev, "%s: PL%03x manf %x rev%u at 0x%08llx irq %d,%d (pio)\n",
+		 mmc_hostname(mmc), amba_part(dev), amba_manf(dev),
+		 amba_rev(dev), (unsigned long long)dev->res.start,
+		 dev->irq[0], dev->irq[1]);
+
+	mmci_dma_setup(host);
 
 	mmc_add_host(mmc);
-
-	dev_info(&dev->dev, "%s: MMCI rev %x cfg %02x at 0x%016llx irq %d,%d\n",
-		mmc_hostname(mmc), amba_rev(dev), amba_config(dev),
-		(unsigned long long)dev->res.start, dev->irq[0], dev->irq[1]);
-
-	init_timer(&host->timer);
-	host->timer.data = (unsigned long)host;
-	host->timer.function = mmci_check_status;
-	host->timer.expires = jiffies + HZ;
-	add_timer(&host->timer);
 
 	return 0;
 
@@ -1188,10 +1348,6 @@ static int __devinit mmci_probe(struct amba_device *dev, struct amba_id *id)
 	if (host->gpio_cd != -ENOSYS)
 		gpio_free(host->gpio_cd);
  err_gpio_cd:
-#ifdef CONFIG_LPC178X_SD_DMA
-	mmc_dma_dealloc();
- err_dma_setup:
-#endif /* CONFIG_LPC178X_SD_DMA */
 	iounmap(host->base);
  clk_disable:
 	clk_disable(host->clk);
@@ -1214,8 +1370,6 @@ static int __devexit mmci_remove(struct amba_device *dev)
 	if (mmc) {
 		struct mmci_host *host = mmc_priv(mmc);
 
-		del_timer_sync(&host->timer);
-
 		mmc_remove_host(mmc);
 
 		writel(0, host->base + MMCIMASK0);
@@ -1224,6 +1378,7 @@ static int __devexit mmci_remove(struct amba_device *dev)
 		writel(0, host->base + MMCICOMMAND);
 		writel(0, host->base + MMCIDATACTRL);
 
+		mmci_dma_release(host);
 		free_irq(dev->irq[0], host);
 		if (!host->singleirq)
 			free_irq(dev->irq[1], host);
@@ -1235,16 +1390,12 @@ static int __devexit mmci_remove(struct amba_device *dev)
 		if (host->gpio_cd != -ENOSYS)
 			gpio_free(host->gpio_cd);
 
-#ifdef CONFIG_LPC178X_SD_DMA
-		mmc_dma_dealloc();
-#endif /* CONFIG_LPC178X_SD_DMA */
-
 		iounmap(host->base);
 		clk_disable(host->clk);
 		clk_put(host->clk);
 
-		if (regulator_is_enabled(host->vcc))
-			regulator_disable(host->vcc);
+		if (host->vcc)
+			mmc_regulator_set_ocr(mmc, host->vcc, 0);
 		regulator_put(host->vcc);
 
 		mmc_free_host(mmc);
@@ -1264,7 +1415,7 @@ static int mmci_suspend(struct amba_device *dev, pm_message_t state)
 	if (mmc) {
 		struct mmci_host *host = mmc_priv(mmc);
 
-		ret = mmc_suspend_host(mmc, state);
+		ret = mmc_suspend_host(mmc);
 		if (ret == 0)
 			writel(0, host->base + MMCIMASK0);
 	}
@@ -1295,8 +1446,13 @@ static int mmci_resume(struct amba_device *dev)
 static struct amba_id mmci_ids[] = {
 	{
 		.id	= 0x00041180,
-		.mask	= 0x000fffff,
+		.mask	= 0xff0fffff,
 		.data	= &variant_arm,
+	},
+	{
+		.id	= 0x01041180,
+		.mask	= 0xff0fffff,
+		.data	= &variant_arm_extended_fifo,
 	},
 	{
 		.id	= 0x00041181,
@@ -1316,8 +1472,13 @@ static struct amba_id mmci_ids[] = {
 	},
 	{
 		.id     = 0x00480180,
-		.mask   = 0x00ffffff,
+		.mask   = 0xf0ffffff,
 		.data	= &variant_ux500,
+	},
+	{
+		.id     = 0x10480180,
+		.mask   = 0xf0ffffff,
+		.data	= &variant_ux500v2,
 	},
 	{ 0, 0 },
 };

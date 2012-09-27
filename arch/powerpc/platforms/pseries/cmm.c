@@ -24,6 +24,7 @@
 #include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/fs.h>
+#include <linux/gfp.h>
 #include <linux/init.h>
 #include <linux/kthread.h>
 #include <linux/module.h>
@@ -507,12 +508,7 @@ static int cmm_memory_isolate_cb(struct notifier_block *self,
 	if (action == MEM_ISOLATE_COUNT)
 		ret = cmm_count_pages(arg);
 
-	if (ret)
-		ret = notifier_from_errno(ret);
-	else
-		ret = NOTIFY_OK;
-
-	return ret;
+	return notifier_from_errno(ret);
 }
 
 static struct notifier_block cmm_mem_isolate_nb = {
@@ -634,12 +630,7 @@ static int cmm_memory_cb(struct notifier_block *self,
 		break;
 	}
 
-	if (ret)
-		ret = notifier_from_errno(ret);
-	else
-		ret = NOTIFY_OK;
-
-	return ret;
+	return notifier_from_errno(ret);
 }
 
 static struct notifier_block cmm_mem_nb = {

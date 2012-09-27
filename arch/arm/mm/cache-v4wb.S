@@ -32,7 +32,7 @@
 /*
  * This is the size at which it becomes more efficient to
  * clean the whole cache, rather than using the individual
- * cache line maintainence instructions.
+ * cache line maintenance instructions.
  *
  *  Size  Clean (ticks) Dirty (ticks)
  *   4096   21  20  21    53  55  54
@@ -49,6 +49,17 @@
 flush_base:
 	.long	FLUSH_BASE
 	.text
+
+/*
+ *	flush_icache_all()
+ *
+ *	Unconditionally clean and invalidate the entire icache.
+ */
+ENTRY(v4wb_flush_icache_all)
+	mov	r0, #0
+	mcr	p15, 0, r0, c7, c5, 0		@ invalidate I cache
+	mov	pc, lr
+ENDPROC(v4wb_flush_icache_all)
 
 /*
  *	flush_user_cache_all()
@@ -173,7 +184,7 @@ ENTRY(v4wb_coherent_user_range)
  *	- start  - virtual start address
  *	- end	 - virtual end address
  */
-ENTRY(v4wb_dma_inv_range)
+v4wb_dma_inv_range:
 	tst	r0, #CACHE_DLINESIZE - 1
 	bic	r0, r0, #CACHE_DLINESIZE - 1
 	mcrne	p15, 0, r0, c7, c10, 1		@ clean D entry
@@ -194,7 +205,7 @@ ENTRY(v4wb_dma_inv_range)
  *	- start  - virtual start address
  *	- end	 - virtual end address
  */
-ENTRY(v4wb_dma_clean_range)
+v4wb_dma_clean_range:
 	bic	r0, r0, #CACHE_DLINESIZE - 1
 1:	mcr	p15, 0, r0, c7, c10, 1		@ clean D entry
 	add	r0, r0, #CACHE_DLINESIZE
@@ -242,17 +253,5 @@ ENDPROC(v4wb_dma_unmap_area)
 
 	__INITDATA
 
-	.type	v4wb_cache_fns, #object
-ENTRY(v4wb_cache_fns)
-	.long	v4wb_flush_kern_cache_all
-	.long	v4wb_flush_user_cache_all
-	.long	v4wb_flush_user_cache_range
-	.long	v4wb_coherent_kern_range
-	.long	v4wb_coherent_user_range
-	.long	v4wb_flush_kern_dcache_area
-	.long	v4wb_dma_map_area
-	.long	v4wb_dma_unmap_area
-	.long	v4wb_dma_inv_range
-	.long	v4wb_dma_clean_range
-	.long	v4wb_dma_flush_range
-	.size	v4wb_cache_fns, . - v4wb_cache_fns
+	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
+	define_cache_functions v4wb

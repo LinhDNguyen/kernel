@@ -27,7 +27,7 @@ INITRD_PHYS := $(initrd_phys-y)
 
 export ZRELADDR INITRD_PHYS PARAMS_PHYS
 
-targets := Image zImage xipImage bootpImage vImage uImage
+targets := Image zImage xipImage bootpImage uImage
 
 ifeq ($(CONFIG_XIP_KERNEL),y)
 
@@ -53,20 +53,17 @@ $(obj)/Image: vmlinux FORCE
 $(obj)/compressed/vmlinux: $(obj)/Image FORCE
 	$(Q)$(MAKE) $(build)=$(obj)/compressed $@
 
-ifeq ($(CONFIG_KERNEL_COMPRESS_NONE),y)
-$(obj)/zImage: FORCE
-	@echo 'Kernel configured for no compression (CONFIG_COMPRESS_NONE=y)'
-	@false
-else
 $(obj)/zImage:	$(obj)/compressed/vmlinux FORCE
 	$(call if_changed,objcopy)
 	@echo '  Kernel: $@ is ready'
-endif
 
 endif
 
-quiet_cmd_vimage = $(OBJCOPY) -O binary -j .envm -S  vmlinux $@
-      cmd_vimage = $(OBJCOPY) -O binary -j .envm -S  vmlinux $@
+# Rule to build device tree blobs
+$(obj)/%.dtb: $(src)/dts/%.dts
+	$(call cmd,dtc)
+
+$(obj)/dtbs: $(addprefix $(obj)/, $(dtb-y))
 
 quiet_cmd_uimage = UIMAGE  $@
       cmd_uimage = $(CONFIG_SHELL) $(MKIMAGE) -A arm -O linux -T kernel \
@@ -79,35 +76,11 @@ else
 $(obj)/uImage: LOADADDR=$(ZRELADDR)
 endif
 
-ifeq ($(CONFIG_THUMB2_KERNEL),y)
-# Set bit 0 to 1 so that "mov pc, rx" switches to Thumb-2 mode
-$(obj)/uImage: STARTADDR=$(shell echo $(LOADADDR) | sed -e "s/.$$/1/")
-else
 $(obj)/uImage: STARTADDR=$(LOADADDR)
-endif
 
-ifeq ($(CONFIG_KERNEL_COMPRESS_NONE),y)
-ifeq ($(CONFIG_KERNEL_IN_ENVM),y)
-$(obj)/vImage:	$(obj)/Image FORCE
-	$(call if_changed,vimage)
-	@echo '  Image $@ is ready'
-$(obj)/uImage:	$(obj)/Image FORCE
-	$(call if_changed,uimage)
-	@echo '  Image $@ is ready'
-else
-$(obj)/vImage: FORCE
-	@echo 'Kernel not configured for CONFIG_KERNEL_IN_ENVM'
-	@false
-$(obj)/uImage:	$(obj)/Image FORCE
-	$(call if_changed,uimage)
-	@echo '  Image $@ is ready'
-endif
-
-else
 $(obj)/uImage:	$(obj)/zImage FORCE
 	$(call if_changed,uimage)
 	@echo '  Image $@ is ready'
-endif
 
 $(obj)/bootp/bootp: $(obj)/zImage initrd FORCE
 	$(Q)$(MAKE) $(build)=$(obj)/bootp $@
@@ -131,6 +104,10 @@ install: $(obj)/Image
 zinstall: $(obj)/zImage
 	$(CONFIG_SHELL) $(srctree)/$(src)/install.sh $(KERNELRELEASE) \
 	$(obj)/zImage System.map "$(INSTALL_PATH)"
+
+uinstall: $(obj)/uImage
+	$(CONFIG_SHELL) $(srctree)/$(src)/install.sh $(KERNELRELEASE) \
+	$(obj)/uImage System.map "$(INSTALL_PATH)"
 
 zi:
 	$(CONFIG_SHELL) $(srctree)/$(src)/install.sh $(KERNELRELEASE) \

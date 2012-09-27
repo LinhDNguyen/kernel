@@ -21,8 +21,6 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/slab.h>
-#include <linux/smp_lock.h>
 #include <linux/delay.h>
 
 #include "saa7134-reg.h"
@@ -174,7 +172,6 @@ static int empress_querycap(struct file *file, void  *priv,
 	strlcpy(cap->card, saa7134_boards[dev->board].name,
 		sizeof(cap->card));
 	sprintf(cap->bus_info, "PCI:%s", pci_name(dev->pci));
-	cap->version = SAA7134_VERSION_CODE;
 	cap->capabilities =
 		V4L2_CAP_VIDEO_CAPTURE |
 		V4L2_CAP_READWRITE |
@@ -224,9 +221,11 @@ static int empress_g_fmt_vid_cap(struct file *file, void *priv,
 				struct v4l2_format *f)
 {
 	struct saa7134_dev *dev = file->private_data;
+	struct v4l2_mbus_framefmt mbus_fmt;
 
-	saa_call_all(dev, video, g_fmt, f);
+	saa_call_all(dev, video, g_mbus_fmt, &mbus_fmt);
 
+	v4l2_fill_pix_format(&f->fmt.pix, &mbus_fmt);
 	f->fmt.pix.pixelformat  = V4L2_PIX_FMT_MPEG;
 	f->fmt.pix.sizeimage    = TS_PACKET_SIZE * dev->ts.nr_packets;
 
@@ -237,8 +236,11 @@ static int empress_s_fmt_vid_cap(struct file *file, void *priv,
 				struct v4l2_format *f)
 {
 	struct saa7134_dev *dev = file->private_data;
+	struct v4l2_mbus_framefmt mbus_fmt;
 
-	saa_call_all(dev, video, s_fmt, f);
+	v4l2_fill_mbus_format(&mbus_fmt, &f->fmt.pix, V4L2_MBUS_FMT_FIXED);
+	saa_call_all(dev, video, s_mbus_fmt, &mbus_fmt);
+	v4l2_fill_pix_format(&f->fmt.pix, &mbus_fmt);
 
 	f->fmt.pix.pixelformat  = V4L2_PIX_FMT_MPEG;
 	f->fmt.pix.sizeimage    = TS_PACKET_SIZE * dev->ts.nr_packets;
@@ -370,6 +372,10 @@ static int empress_queryctrl(struct file *file, void *priv,
 	static const u32 mpeg_ctrls[] = {
 		V4L2_CID_MPEG_CLASS,
 		V4L2_CID_MPEG_STREAM_TYPE,
+		V4L2_CID_MPEG_STREAM_PID_PMT,
+		V4L2_CID_MPEG_STREAM_PID_AUDIO,
+		V4L2_CID_MPEG_STREAM_PID_VIDEO,
+		V4L2_CID_MPEG_STREAM_PID_PCR,
 		V4L2_CID_MPEG_AUDIO_SAMPLING_FREQ,
 		V4L2_CID_MPEG_AUDIO_ENCODING,
 		V4L2_CID_MPEG_AUDIO_L2_BITRATE,
@@ -538,7 +544,7 @@ static int empress_init(struct saa7134_dev *dev)
 			    V4L2_BUF_TYPE_VIDEO_CAPTURE,
 			    V4L2_FIELD_ALTERNATE,
 			    sizeof(struct saa7134_buf),
-			    dev);
+			    dev, NULL);
 
 	empress_signal_update(&dev->empress_workqueue);
 	return 0;
@@ -550,7 +556,7 @@ static int empress_fini(struct saa7134_dev *dev)
 
 	if (NULL == dev->empress_dev)
 		return 0;
-	flush_scheduled_work();
+	flush_work_sync(&dev->empress_workqueue);
 	video_unregister_device(dev->empress_dev);
 	dev->empress_dev = NULL;
 	return 0;

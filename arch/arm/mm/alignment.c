@@ -17,10 +17,12 @@
 #include <linux/errno.h>
 #include <linux/string.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include <linux/init.h>
 #include <linux/sched.h>
 #include <linux/uaccess.h>
 
+#include <asm/system.h>
 #include <asm/unaligned.h>
 
 #include "fault.h"
@@ -94,36 +96,56 @@ static const char *usermode_action[] = {
 	"signal+warn"
 };
 
-static int
-proc_alignment_read(char *page, char **start, off_t off, int count, int *eof,
-		    void *data)
+/* Return true if and only if the ARMv6 unaligned access model is in use. */
+static bool cpu_is_v6_unaligned(void)
 {
-	char *p = page;
-	int len;
-
-	p += sprintf(p, "User:\t\t%lu\n", ai_user);
-	p += sprintf(p, "System:\t\t%lu\n", ai_sys);
-	p += sprintf(p, "Skipped:\t%lu\n", ai_skipped);
-	p += sprintf(p, "Half:\t\t%lu\n", ai_half);
-	p += sprintf(p, "Word:\t\t%lu\n", ai_word);
-	if (cpu_architecture() >= CPU_ARCH_ARMv5TE)
-		p += sprintf(p, "DWord:\t\t%lu\n", ai_dword);
-	p += sprintf(p, "Multi:\t\t%lu\n", ai_multi);
-	p += sprintf(p, "User faults:\t%i (%s)\n", ai_usermode,
-			usermode_action[ai_usermode]);
-
-	len = (p - page) - off;
-	if (len < 0)
-		len = 0;
-
-	*eof = (len <= count) ? 1 : 0;
-	*start = page + off;
-
-	return len;
+	return cpu_architecture() >= CPU_ARCH_ARMv6 && (cr_alignment & CR_U);
 }
 
-static int proc_alignment_write(struct file *file, const char __user *buffer,
-				unsigned long count, void *data)
+static int safe_usermode(int new_usermode, bool warn)
+{
+	/*
+	 * ARMv6 and later CPUs can perform unaligned accesses for
+	 * most single load and store instructions up to word size.
+	 * LDM, STM, LDRD and STRD still need to be handled.
+	 *
+	 * Ignoring the alignment fault is not an option on these
+	 * CPUs since we spin re-faulting the instruction without
+	 * making any progress.
+	 */
+	if (cpu_is_v6_unaligned() && !(new_usermode & (UM_FIXUP | UM_SIGNAL))) {
+		new_usermode |= UM_FIXUP;
+
+		if (warn)
+			printk(KERN_WARNING "alignment: ignoring faults is unsafe on this CPU.  Defaulting to fixup mode.\n");
+	}
+
+	return new_usermode;
+}
+
+static int alignment_proc_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "User:\t\t%lu\n", ai_user);
+	seq_printf(m, "System:\t\t%lu\n", ai_sys);
+	seq_printf(m, "Skipped:\t%lu\n", ai_skipped);
+	seq_printf(m, "Half:\t\t%lu\n", ai_half);
+	seq_printf(m, "Word:\t\t%lu\n", ai_word);
+	if (cpu_architecture() >= CPU_ARCH_ARMv5TE)
+		seq_printf(m, "DWord:\t\t%lu\n", ai_dword);
+	seq_printf(m, "Multi:\t\t%lu\n", ai_multi);
+	seq_printf(m, "User faults:\t%i (%s)\n", ai_usermode,
+			usermode_action[ai_usermode]);
+
+	return 0;
+}
+
+static int alignment_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, alignment_proc_show, NULL);
+}
+
+static ssize_t alignment_proc_write(struct file *file, const char __user *buffer,
+				    size_t count, loff_t *pos)
 {
 	char mode;
 
@@ -131,11 +153,18 @@ static int proc_alignment_write(struct file *file, const char __user *buffer,
 		if (get_user(mode, buffer))
 			return -EFAULT;
 		if (mode >= '0' && mode <= '5')
-			ai_usermode = mode - '0';
+			ai_usermode = safe_usermode(mode - '0', true);
 	}
 	return count;
 }
 
+static const struct file_operations alignment_proc_fops = {
+	.open		= alignment_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+	.write		= alignment_proc_write,
+};
 #endif /* CONFIG_PROC_FS */
 
 union offset_union {
@@ -166,15 +195,15 @@ union offset_union {
  THUMB(	"1:	"ins"	%1, [%2]\n"	)		\
  THUMB(	"	add	%2, %2, #1\n"	)		\
 	"2:\n"						\
-	"	.section .fixup,\"ax\"\n"		\
+	"	.pushsection .fixup,\"ax\"\n"		\
 	"	.align	2\n"				\
 	"3:	mov	%0, #1\n"			\
 	"	b	2b\n"				\
-	"	.previous\n"				\
-	"	.section __ex_table,\"a\"\n"		\
+	"	.popsection\n"				\
+	"	.pushsection __ex_table,\"a\"\n"	\
 	"	.align	3\n"				\
 	"	.long	1b, 3b\n"			\
-	"	.previous\n"				\
+	"	.popsection\n"				\
 	: "=r" (err), "=&r" (val), "=r" (addr)		\
 	: "0" (err), "2" (addr))
 
@@ -226,16 +255,16 @@ union offset_union {
 		"	mov	%1, %1, "NEXT_BYTE"\n"		\
 		"2:	"ins"	%1, [%2]\n"			\
 		"3:\n"						\
-		"	.section .fixup,\"ax\"\n"		\
+		"	.pushsection .fixup,\"ax\"\n"		\
 		"	.align	2\n"				\
 		"4:	mov	%0, #1\n"			\
 		"	b	3b\n"				\
-		"	.previous\n"				\
-		"	.section __ex_table,\"a\"\n"		\
+		"	.popsection\n"				\
+		"	.pushsection __ex_table,\"a\"\n"	\
 		"	.align	3\n"				\
 		"	.long	1b, 4b\n"			\
 		"	.long	2b, 4b\n"			\
-		"	.previous\n"				\
+		"	.popsection\n"				\
 		: "=r" (err), "=&r" (v), "=&r" (a)		\
 		: "0" (err), "1" (v), "2" (a));			\
 		if (err)					\
@@ -266,18 +295,18 @@ union offset_union {
 		"	mov	%1, %1, "NEXT_BYTE"\n"		\
 		"4:	"ins"	%1, [%2]\n"			\
 		"5:\n"						\
-		"	.section .fixup,\"ax\"\n"		\
+		"	.pushsection .fixup,\"ax\"\n"		\
 		"	.align	2\n"				\
 		"6:	mov	%0, #1\n"			\
 		"	b	5b\n"				\
-		"	.previous\n"				\
-		"	.section __ex_table,\"a\"\n"		\
+		"	.popsection\n"				\
+		"	.pushsection __ex_table,\"a\"\n"	\
 		"	.align	3\n"				\
 		"	.long	1b, 6b\n"			\
 		"	.long	2b, 6b\n"			\
 		"	.long	3b, 6b\n"			\
 		"	.long	4b, 6b\n"			\
-		"	.previous\n"				\
+		"	.popsection\n"				\
 		: "=r" (err), "=&r" (v), "=&r" (a)		\
 		: "0" (err), "1" (v), "2" (a));			\
 		if (err)					\
@@ -726,6 +755,9 @@ do_alignment(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	int isize = 4;
 	int thumb2_32b = 0;
 
+	if (interrupts_enabled(regs))
+		local_irq_enable();
+
 	instrptr = instruction_pointer(regs);
 
 	fs = get_fs();
@@ -882,10 +914,32 @@ do_alignment(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	if (ai_usermode & UM_FIXUP)
 		goto fixup;
 
-	if (ai_usermode & UM_SIGNAL)
-		force_sig(SIGBUS, current);
-	else
-		set_cr(cr_no_alignment);
+	if (ai_usermode & UM_SIGNAL) {
+		siginfo_t si;
+
+		si.si_signo = SIGBUS;
+		si.si_errno = 0;
+		si.si_code = BUS_ADRALN;
+		si.si_addr = (void __user *)addr;
+
+		force_sig_info(si.si_signo, &si, current);
+	} else {
+		/*
+		 * We're about to disable the alignment trap and return to
+		 * user space.  But if an interrupt occurs before actually
+		 * reaching user space, then the IRQ vector entry code will
+		 * notice that we were still in kernel space and therefore
+		 * the alignment trap won't be re-enabled in that case as it
+		 * is presumed to be always on from kernel space.
+		 * Let's prevent that race by disabling interrupts here (they
+		 * are disabled on the way back to user space anyway in
+		 * entry-common.S) and disable the alignment trap only if
+		 * there is no work pending for this thread.
+		 */
+		raw_local_irq_disable();
+		if (!(current_thread_info()->flags & _TIF_WORK_MASK))
+			set_cr(cr_no_alignment);
+	}
 
 	return 0;
 }
@@ -901,32 +955,33 @@ static int __init alignment_init(void)
 #ifdef CONFIG_PROC_FS
 	struct proc_dir_entry *res;
 
-	res = create_proc_entry("cpu/alignment", S_IWUSR | S_IRUGO, NULL);
+	res = proc_create("cpu/alignment", S_IWUSR | S_IRUGO, NULL,
+			  &alignment_proc_fops);
 	if (!res)
 		return -ENOMEM;
-
-	res->read_proc = proc_alignment_read;
-	res->write_proc = proc_alignment_write;
 #endif
 
-	/*
-	 * ARMv6 and later CPUs can perform unaligned accesses for
-	 * most single load and store instructions up to word size.
-	 * LDM, STM, LDRD and STRD still need to be handled.
-	 *
-	 * Ignoring the alignment fault is not an option on these
-	 * CPUs since we spin re-faulting the instruction without
-	 * making any progress.
-	 */
-	if (cpu_architecture() >= CPU_ARCH_ARMv6 && (cr_alignment & CR_U)) {
+	if (cpu_is_v6_unaligned()) {
 		cr_alignment &= ~CR_A;
 		cr_no_alignment &= ~CR_A;
 		set_cr(cr_alignment);
-		ai_usermode = UM_FIXUP;
+		ai_usermode = safe_usermode(ai_usermode, false);
 	}
 
-	hook_fault_code(1, do_alignment, SIGILL, "alignment exception");
-	hook_fault_code(3, do_alignment, SIGILL, "alignment exception");
+	hook_fault_code(1, do_alignment, SIGBUS, BUS_ADRALN,
+			"alignment exception");
+
+	/*
+	 * ARMv6K and ARMv7 use fault status 3 (0b00011) as Access Flag section
+	 * fault, not as alignment error.
+	 *
+	 * TODO: handle ARMv6K properly. Runtime check for 'K' extension is
+	 * needed.
+	 */
+	if (cpu_architecture() <= CPU_ARCH_ARMv6) {
+		hook_fault_code(3, do_alignment, SIGBUS, BUS_ADRALN,
+				"alignment exception");
+	}
 
 	return 0;
 }

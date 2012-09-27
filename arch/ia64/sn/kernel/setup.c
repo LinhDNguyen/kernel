@@ -241,7 +241,7 @@ static void __cpuinit sn_check_for_wars(void)
  * Note:  This stuff is duped here because Altix requires the PCDP to
  * locate a usable VGA device due to lack of proper ACPI support.  Structures
  * could be used from drivers/firmware/pcdp.h, but it was decided that moving
- * this file to a more public location just for Altix use was undesireable.
+ * this file to a more public location just for Altix use was undesirable.
  */
 
 struct hcdp_uart_desc {
@@ -507,7 +507,7 @@ static void __init sn_init_pdas(char **cmdline_p)
 	cnodeid_t cnode;
 
 	/*
-	 * Allocate & initalize the nodepda for each node.
+	 * Allocate & initialize the nodepda for each node.
 	 */
 	for_each_online_node(cnode) {
 		nodepdaindr[cnode] =
@@ -592,7 +592,7 @@ void __cpuinit sn_cpu_init(void)
 	/*
 	 * Don't check status. The SAL call is not supported on all PROMs
 	 * but a failure is harmless.
-	 * Architechtuallly, cpu_init is always called twice on cpu 0. We
+	 * Architecturally, cpu_init is always called twice on cpu 0. We
 	 * should set cpu_number on cpu 0 once.
 	 */
 	if (cpuid == 0) {

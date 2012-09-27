@@ -329,8 +329,8 @@ static int w83791d_detect(struct i2c_client *client,
 			  struct i2c_board_info *info);
 static int w83791d_remove(struct i2c_client *client);
 
-static int w83791d_read(struct i2c_client *client, u8 register);
-static int w83791d_write(struct i2c_client *client, u8 register, u8 value);
+static int w83791d_read(struct i2c_client *client, u8 reg);
+static int w83791d_write(struct i2c_client *client, u8 reg, u8 value);
 static struct w83791d_data *w83791d_update_device(struct device *dev);
 
 #ifdef DEBUG
@@ -556,7 +556,7 @@ static ssize_t show_fan_div(struct device *dev, struct device_attribute *attr,
 
 /* Note: we save and restore the fan minimum here, because its value is
    determined in part by the fan divisor.  This follows the principle of
-   least suprise; the user doesn't expect the fan minimum to change just
+   least surprise; the user doesn't expect the fan minimum to change just
    because the divisor changed. */
 static ssize_t store_fan_div(struct device *dev, struct device_attribute *attr,
 				const char *buf, size_t count)

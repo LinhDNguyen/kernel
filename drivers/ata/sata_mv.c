@@ -64,6 +64,7 @@
 #include <linux/ata_platform.h>
 #include <linux/mbus.h>
 #include <linux/bitops.h>
+#include <linux/gfp.h>
 #include <scsi/scsi_host.h>
 #include <scsi/scsi_cmnd.h>
 #include <scsi/scsi_device.h>
@@ -159,8 +160,7 @@ enum {
 	/* Host Flags */
 	MV_FLAG_DUAL_HC		= (1 << 30),  /* two SATA Host Controllers */
 
-	MV_COMMON_FLAGS		= ATA_FLAG_SATA | ATA_FLAG_NO_LEGACY |
-				  ATA_FLAG_MMIO | ATA_FLAG_PIO_POLLING,
+	MV_COMMON_FLAGS		= ATA_FLAG_SATA | ATA_FLAG_PIO_POLLING,
 
 	MV_GEN_I_FLAGS		= MV_COMMON_FLAGS | ATA_FLAG_NO_ATAPI,
 
@@ -674,8 +674,6 @@ static struct ata_port_operations mv5_ops = {
 	.freeze			= mv_eh_freeze,
 	.thaw			= mv_eh_thaw,
 	.hardreset		= mv_hardreset,
-	.error_handler		= ata_std_error_handler, /* avoid SFF EH */
-	.post_internal_cmd	= ATA_OP_NULL,
 
 	.scr_read		= mv5_scr_read,
 	.scr_write		= mv5_scr_write,
@@ -685,15 +683,26 @@ static struct ata_port_operations mv5_ops = {
 };
 
 static struct ata_port_operations mv6_ops = {
-	.inherits		= &mv5_ops,
-	.dev_config             = mv6_dev_config,
-	.scr_read		= mv_scr_read,
-	.scr_write		= mv_scr_write,
+	.inherits		= &ata_bmdma_port_ops,
 
+	.lost_interrupt		= ATA_OP_NULL,
+
+	.qc_defer		= mv_qc_defer,
+	.qc_prep		= mv_qc_prep,
+	.qc_issue		= mv_qc_issue,
+
+	.dev_config             = mv6_dev_config,
+
+	.freeze			= mv_eh_freeze,
+	.thaw			= mv_eh_thaw,
+	.hardreset		= mv_hardreset,
+	.softreset		= mv_softreset,
 	.pmp_hardreset		= mv_pmp_hardreset,
 	.pmp_softreset		= mv_softreset,
-	.softreset		= mv_softreset,
 	.error_handler		= mv_pmp_error_handler,
+
+	.scr_read		= mv_scr_read,
+	.scr_write		= mv_scr_write,
 
 	.sff_check_status	= mv_sff_check_status,
 	.sff_irq_clear		= mv_sff_irq_clear,
@@ -702,6 +711,9 @@ static struct ata_port_operations mv6_ops = {
 	.bmdma_start		= mv_bmdma_start,
 	.bmdma_stop		= mv_bmdma_stop,
 	.bmdma_status		= mv_bmdma_status,
+
+	.port_start		= mv_port_start,
+	.port_stop		= mv_port_stop,
 };
 
 static struct ata_port_operations mv_iie_ops = {
@@ -1178,7 +1190,7 @@ static void mv_wait_for_edma_empty_idle(struct ata_port *ap)
 			break;
 		udelay(per_loop);
 	}
-	/* ata_port_printk(ap, KERN_INFO, "%s: %u+ usecs\n", __func__, i); */
+	/* ata_port_info(ap, "%s: %u+ usecs\n", __func__, i); */
 }
 
 /**
@@ -1216,7 +1228,7 @@ static int mv_stop_edma(struct ata_port *ap)
 	pp->pp_flags &= ~MV_PP_FLAG_EDMA_EN;
 	mv_wait_for_edma_empty_idle(ap);
 	if (mv_stop_edma_engine(port_mmio)) {
-		ata_port_printk(ap, KERN_ERR, "Unable to stop eDMA\n");
+		ata_port_err(ap, "Unable to stop eDMA\n");
 		err = -EIO;
 	}
 	mv_edma_cfg(ap, 0, 0);
@@ -1340,7 +1352,7 @@ static int mv_scr_write(struct ata_link *link, unsigned int sc_reg_in, u32 val)
 			/*
 			 * Workaround for 88SX60x1 FEr SATA#26:
 			 *
-			 * COMRESETs have to take care not to accidently
+			 * COMRESETs have to take care not to accidentally
 			 * put the drive to sleep when writing SCR_CONTROL.
 			 * Setting bits 12..15 prevents this problem.
 			 *
@@ -1370,7 +1382,7 @@ static void mv6_dev_config(struct ata_device *adev)
 	if (adev->flags & ATA_DFLAG_NCQ) {
 		if (sata_pmp_attached(adev->link->ap)) {
 			adev->flags &= ~ATA_DFLAG_NCQ;
-			ata_dev_printk(adev, KERN_INFO,
+			ata_dev_info(adev,
 				"NCQ disabled for command-based switching\n");
 		}
 	}
@@ -1885,19 +1897,25 @@ static void mv_bmdma_start(struct ata_queued_cmd *qc)
  *	LOCKING:
  *	Inherited from caller.
  */
-static void mv_bmdma_stop(struct ata_queued_cmd *qc)
+static void mv_bmdma_stop_ap(struct ata_port *ap)
 {
-	struct ata_port *ap = qc->ap;
 	void __iomem *port_mmio = mv_ap_base(ap);
 	u32 cmd;
 
 	/* clear start/stop bit */
 	cmd = readl(port_mmio + BMDMA_CMD);
-	cmd &= ~ATA_DMA_START;
-	writelfl(cmd, port_mmio + BMDMA_CMD);
+	if (cmd & ATA_DMA_START) {
+		cmd &= ~ATA_DMA_START;
+		writelfl(cmd, port_mmio + BMDMA_CMD);
 
-	/* one-PIO-cycle guaranteed wait, per spec, for HDMA1:0 transition */
-	ata_sff_dma_pause(ap);
+		/* one-PIO-cycle guaranteed wait, per spec, for HDMA1:0 transition */
+		ata_sff_dma_pause(ap);
+	}
+}
+
+static void mv_bmdma_stop(struct ata_queued_cmd *qc)
+{
+	mv_bmdma_stop_ap(qc->ap);
 }
 
 /**
@@ -1921,8 +1939,21 @@ static u8 mv_bmdma_status(struct ata_port *ap)
 	reg = readl(port_mmio + BMDMA_STATUS);
 	if (reg & ATA_DMA_ACTIVE)
 		status = ATA_DMA_ACTIVE;
-	else
+	else if (reg & ATA_DMA_ERR)
 		status = (reg & ATA_DMA_ERR) | ATA_DMA_INTR;
+	else {
+		/*
+		 * Just because DMA_ACTIVE is 0 (DMA completed),
+		 * this does _not_ mean the device is "done".
+		 * So we should not yet be signalling ATA_DMA_INTR
+		 * in some cases.  Eg. DSM/TRIM, and perhaps others.
+		 */
+		mv_bmdma_stop_ap(ap);
+		if (ioread8(ap->ioaddr.altstatus_addr) & ATA_BUSY)
+			status = 0;
+		else
+			status = ATA_DMA_INTR;
+	}
 	return status;
 }
 
@@ -1982,6 +2013,9 @@ static void mv_qc_prep(struct ata_queued_cmd *qc)
 
 	switch (tf->protocol) {
 	case ATA_PROT_DMA:
+		if (tf->command == ATA_CMD_DSM)
+			return;
+		/* fall-thru */
 	case ATA_PROT_NCQ:
 		break;	/* continue below */
 	case ATA_PROT_PIO:
@@ -2010,7 +2044,7 @@ static void mv_qc_prep(struct ata_queued_cmd *qc)
 
 	cw = &pp->crqb[in_index].ata_cmd[0];
 
-	/* Sadly, the CRQB cannot accomodate all registers--there are
+	/* Sadly, the CRQB cannot accommodate all registers--there are
 	 * only 11 bytes...so we must pick and choose required
 	 * registers based on the command.  So, we drop feature and
 	 * hob_feature for [RW] DMA commands, but they are needed for
@@ -2081,6 +2115,8 @@ static void mv_qc_prep_iie(struct ata_queued_cmd *qc)
 	if ((tf->protocol != ATA_PROT_DMA) &&
 	    (tf->protocol != ATA_PROT_NCQ))
 		return;
+	if (tf->command == ATA_CMD_DSM)
+		return;  /* use bmdma for this */
 
 	/* Fill in Gen IIE command request block */
 	if (!(tf->flags & ATA_TFLAG_WRITE))
@@ -2189,9 +2225,8 @@ static unsigned int mv_send_fis(struct ata_port *ap, u32 *fis, int nwords)
 
 	/* See if it worked */
 	if ((ifstat & 0x3000) != 0x1000) {
-		ata_port_printk(ap, KERN_WARNING,
-				"%s transmission error, ifstat=%08x\n",
-				__func__, ifstat);
+		ata_port_warn(ap, "%s transmission error, ifstat=%08x\n",
+			      __func__, ifstat);
 		return AC_ERR_OTHER;
 	}
 	return 0;
@@ -2247,7 +2282,7 @@ static unsigned int mv_qc_issue_fis(struct ata_queued_cmd *qc)
 	}
 
 	if (qc->tf.flags & ATA_TFLAG_POLLING)
-		ata_pio_queue_task(ap, qc, 0);
+		ata_sff_queue_pio_task(link, 0);
 	return 0;
 }
 
@@ -2276,6 +2311,12 @@ static unsigned int mv_qc_issue(struct ata_queued_cmd *qc)
 
 	switch (qc->tf.protocol) {
 	case ATA_PROT_DMA:
+		if (qc->tf.command == ATA_CMD_DSM) {
+			if (!ap->ops->bmdma_setup)  /* no bmdma on GEN_I */
+				return AC_ERR_OTHER;
+			break;  /* use bmdma for this */
+		}
+		/* fall thru */
 	case ATA_PROT_NCQ:
 		mv_start_edma(ap, port_mmio, pp, qc->tf.protocol);
 		pp->req_idx = (pp->req_idx + 1) & MV_MAX_Q_DEPTH_MASK;
@@ -2300,9 +2341,9 @@ static unsigned int mv_qc_issue(struct ata_queued_cmd *qc)
 		 */
 		if (limit_warnings > 0 && (qc->nbytes / qc->sect_size) > 1) {
 			--limit_warnings;
-			ata_link_printk(qc->dev->link, KERN_WARNING, DRV_NAME
-					": attempting PIO w/multiple DRQ: "
-					"this may fail due to h/w errata\n");
+			ata_link_warn(qc->dev->link, DRV_NAME
+				      ": attempting PIO w/multiple DRQ: "
+				      "this may fail due to h/w errata\n");
 		}
 		/* drop through */
 	case ATA_PROT_NODATA:
@@ -2343,7 +2384,7 @@ static unsigned int mv_qc_issue(struct ata_queued_cmd *qc)
 		if (IS_GEN_II(hpriv))
 			return mv_qc_issue_fis(qc);
 	}
-	return ata_sff_qc_issue(qc);
+	return ata_bmdma_qc_issue(qc);
 }
 
 static struct ata_queued_cmd *mv_get_active_qc(struct ata_port *ap)
@@ -2354,13 +2395,9 @@ static struct ata_queued_cmd *mv_get_active_qc(struct ata_port *ap)
 	if (pp->pp_flags & MV_PP_FLAG_NCQ_EN)
 		return NULL;
 	qc = ata_qc_from_tag(ap, ap->link.active_tag);
-	if (qc) {
-		if (qc->tf.flags & ATA_TFLAG_POLLING)
-			qc = NULL;
-		else if (!(qc->flags & ATA_QCFLAG_ACTIVE))
-			qc = NULL;
-	}
-	return qc;
+	if (qc && !(qc->tf.flags & ATA_TFLAG_POLLING))
+		return qc;
+	return NULL;
 }
 
 static void mv_pmp_error_handler(struct ata_port *ap)
@@ -2461,20 +2498,20 @@ static int mv_handle_fbs_ncq_dev_err(struct ata_port *ap)
 	}
 	failed_links = hweight16(new_map);
 
-	ata_port_printk(ap, KERN_INFO, "%s: pmp_map=%04x qc_map=%04x "
-			"failed_links=%d nr_active_links=%d\n",
-			__func__, pp->delayed_eh_pmp_map,
-			ap->qc_active, failed_links,
-			ap->nr_active_links);
+	ata_port_info(ap,
+		      "%s: pmp_map=%04x qc_map=%04x failed_links=%d nr_active_links=%d\n",
+		      __func__, pp->delayed_eh_pmp_map,
+		      ap->qc_active, failed_links,
+		      ap->nr_active_links);
 
 	if (ap->nr_active_links <= failed_links && mv_req_q_empty(ap)) {
 		mv_process_crpb_entries(ap, pp);
 		mv_stop_edma(ap);
 		mv_eh_freeze(ap);
-		ata_port_printk(ap, KERN_INFO, "%s: done\n", __func__);
+		ata_port_info(ap, "%s: done\n", __func__);
 		return 1;	/* handled */
 	}
-	ata_port_printk(ap, KERN_INFO, "%s: waiting\n", __func__);
+	ata_port_info(ap, "%s: waiting\n", __func__);
 	return 1;	/* handled */
 }
 
@@ -2516,9 +2553,8 @@ static int mv_handle_dev_err(struct ata_port *ap, u32 edma_err_cause)
 		 * and we cannot handle it here.
 		 */
 		if (edma_err_cause & EDMA_ERR_SELF_DIS) {
-			ata_port_printk(ap, KERN_WARNING,
-				"%s: err_cause=0x%x pp_flags=0x%x\n",
-				__func__, edma_err_cause, pp->pp_flags);
+			ata_port_warn(ap, "%s: err_cause=0x%x pp_flags=0x%x\n",
+				      __func__, edma_err_cause, pp->pp_flags);
 			return 0; /* not handled */
 		}
 		return mv_handle_fbs_ncq_dev_err(ap);
@@ -2529,9 +2565,8 @@ static int mv_handle_dev_err(struct ata_port *ap, u32 edma_err_cause)
 		 * and we cannot handle it here.
 		 */
 		if (!(edma_err_cause & EDMA_ERR_SELF_DIS)) {
-			ata_port_printk(ap, KERN_WARNING,
-				"%s: err_cause=0x%x pp_flags=0x%x\n",
-				__func__, edma_err_cause, pp->pp_flags);
+			ata_port_warn(ap, "%s: err_cause=0x%x pp_flags=0x%x\n",
+				      __func__, edma_err_cause, pp->pp_flags);
 			return 0; /* not handled */
 		}
 		return mv_handle_fbs_non_ncq_dev_err(ap);
@@ -2545,9 +2580,7 @@ static void mv_unexpected_intr(struct ata_port *ap, int edma_was_enabled)
 	char *when = "idle";
 
 	ata_ehi_clear_desc(ehi);
-	if (ap->flags & ATA_FLAG_DISABLED) {
-		when = "disabled";
-	} else if (edma_was_enabled) {
+	if (edma_was_enabled) {
 		when = "EDMA enabled";
 	} else {
 		struct ata_queued_cmd *qc = ata_qc_from_tag(ap, ap->link.active_tag);
@@ -2706,37 +2739,32 @@ static void mv_err_intr(struct ata_port *ap)
 	}
 }
 
-static void mv_process_crpb_response(struct ata_port *ap,
+static bool mv_process_crpb_response(struct ata_port *ap,
 		struct mv_crpb *response, unsigned int tag, int ncq_enabled)
 {
-	struct ata_queued_cmd *qc = ata_qc_from_tag(ap, tag);
+	u8 ata_status;
+	u16 edma_status = le16_to_cpu(response->flags);
 
-	if (qc) {
-		u8 ata_status;
-		u16 edma_status = le16_to_cpu(response->flags);
-		/*
-		 * edma_status from a response queue entry:
-		 *   LSB is from EDMA_ERR_IRQ_CAUSE (non-NCQ only).
-		 *   MSB is saved ATA status from command completion.
-		 */
-		if (!ncq_enabled) {
-			u8 err_cause = edma_status & 0xff & ~EDMA_ERR_DEV;
-			if (err_cause) {
-				/*
-				 * Error will be seen/handled by mv_err_intr().
-				 * So do nothing at all here.
-				 */
-				return;
-			}
+	/*
+	 * edma_status from a response queue entry:
+	 *   LSB is from EDMA_ERR_IRQ_CAUSE (non-NCQ only).
+	 *   MSB is saved ATA status from command completion.
+	 */
+	if (!ncq_enabled) {
+		u8 err_cause = edma_status & 0xff & ~EDMA_ERR_DEV;
+		if (err_cause) {
+			/*
+			 * Error will be seen/handled by
+			 * mv_err_intr().  So do nothing at all here.
+			 */
+			return false;
 		}
-		ata_status = edma_status >> CRPB_FLAG_STATUS_SHIFT;
-		if (!ac_err_mask(ata_status))
-			ata_qc_complete(qc);
-		/* else: leave it for mv_err_intr() */
-	} else {
-		ata_port_printk(ap, KERN_ERR, "%s: no qc for tag=%d\n",
-				__func__, tag);
 	}
+	ata_status = edma_status >> CRPB_FLAG_STATUS_SHIFT;
+	if (!ac_err_mask(ata_status))
+		return true;
+	/* else: leave it for mv_err_intr() */
+	return false;
 }
 
 static void mv_process_crpb_entries(struct ata_port *ap, struct mv_port_priv *pp)
@@ -2745,6 +2773,7 @@ static void mv_process_crpb_entries(struct ata_port *ap, struct mv_port_priv *pp
 	struct mv_host_priv *hpriv = ap->host->private_data;
 	u32 in_index;
 	bool work_done = false;
+	u32 done_mask = 0;
 	int ncq_enabled = (pp->pp_flags & MV_PP_FLAG_NCQ_EN);
 
 	/* Get the hardware queue position index */
@@ -2765,15 +2794,19 @@ static void mv_process_crpb_entries(struct ata_port *ap, struct mv_port_priv *pp
 			/* Gen II/IIE: get command tag from CRPB entry */
 			tag = le16_to_cpu(response->id) & 0x1f;
 		}
-		mv_process_crpb_response(ap, response, tag, ncq_enabled);
+		if (mv_process_crpb_response(ap, response, tag, ncq_enabled))
+			done_mask |= 1 << tag;
 		work_done = true;
 	}
 
-	/* Update the software queue position index in hardware */
-	if (work_done)
+	if (work_done) {
+		ata_qc_complete_multiple(ap, ap->qc_active ^ done_mask);
+
+		/* Update the software queue position index in hardware */
 		writelfl((pp->crpb_dma & EDMA_RSP_Q_BASE_LO_MASK) |
 			 (pp->resp_idx << EDMA_RSP_Q_PTR_SHIFT),
 			 port_mmio + EDMA_RSP_Q_OUT_PTR);
+	}
 }
 
 static void mv_port_intr(struct ata_port *ap, u32 port_cause)
@@ -2781,10 +2814,6 @@ static void mv_port_intr(struct ata_port *ap, u32 port_cause)
 	struct mv_port_priv *pp;
 	int edma_was_enabled;
 
-	if (ap->flags & ATA_FLAG_DISABLED) {
-		mv_unexpected_intr(ap, 0);
-		return;
-	}
 	/*
 	 * Grab a snapshot of the EDMA_EN flag setting,
 	 * so that we have a consistent view for this port,
@@ -2808,7 +2837,7 @@ static void mv_port_intr(struct ata_port *ap, u32 port_cause)
 	} else if (!edma_was_enabled) {
 		struct ata_queued_cmd *qc = mv_get_active_qc(ap);
 		if (qc)
-			ata_sff_host_intr(ap, qc);
+			ata_bmdma_port_intr(ap, qc);
 		else
 			mv_unexpected_intr(ap, edma_was_enabled);
 	}
@@ -2898,8 +2927,7 @@ static int mv_pci_error(struct ata_host *host, void __iomem *mmio)
 
 	err_cause = readl(mmio + hpriv->irq_cause_offset);
 
-	dev_printk(KERN_ERR, host->dev, "PCI ERROR; PCI IRQ cause=0x%08x\n",
-		   err_cause);
+	dev_err(host->dev, "PCI ERROR; PCI IRQ cause=0x%08x\n", err_cause);
 
 	DPRINTK("All regs @ PCI error\n");
 	mv_dump_all_regs(mmio, -1, to_pci_dev(host->dev));
@@ -3655,9 +3683,6 @@ static void mv_port_init(struct ata_ioports *port,  void __iomem *port_mmio)
 	/* special case: control/altstatus doesn't have ATA_REG_ address */
 	port->altstatus_addr = port->ctl_addr = shd_base + SHD_CTL_AST;
 
-	/* unused: */
-	port->cmd_addr = port->bmdma_addr = port->scr_addr = NULL;
-
 	/* Clear any currently outstanding port interrupt conditions */
 	serr = port_mmio + mv_scr_offset(SCR_ERROR);
 	writelfl(readl(serr), serr);
@@ -3731,8 +3756,8 @@ static int mv_chip_id(struct ata_host *host, unsigned int board_idx)
 			hp_flags |= MV_HP_ERRATA_50XXB2;
 			break;
 		default:
-			dev_printk(KERN_WARNING, &pdev->dev,
-			   "Applying 50XXB2 workarounds to unknown rev\n");
+			dev_warn(&pdev->dev,
+				 "Applying 50XXB2 workarounds to unknown rev\n");
 			hp_flags |= MV_HP_ERRATA_50XXB2;
 			break;
 		}
@@ -3751,8 +3776,8 @@ static int mv_chip_id(struct ata_host *host, unsigned int board_idx)
 			hp_flags |= MV_HP_ERRATA_50XXB2;
 			break;
 		default:
-			dev_printk(KERN_WARNING, &pdev->dev,
-			   "Applying B2 workarounds to unknown rev\n");
+			dev_warn(&pdev->dev,
+				 "Applying B2 workarounds to unknown rev\n");
 			hp_flags |= MV_HP_ERRATA_50XXB2;
 			break;
 		}
@@ -3772,8 +3797,8 @@ static int mv_chip_id(struct ata_host *host, unsigned int board_idx)
 			hp_flags |= MV_HP_ERRATA_60X1C0;
 			break;
 		default:
-			dev_printk(KERN_WARNING, &pdev->dev,
-				   "Applying B2 workarounds to unknown rev\n");
+			dev_warn(&pdev->dev,
+				 "Applying B2 workarounds to unknown rev\n");
 			hp_flags |= MV_HP_ERRATA_60X1B2;
 			break;
 		}
@@ -3822,8 +3847,8 @@ static int mv_chip_id(struct ata_host *host, unsigned int board_idx)
 			hp_flags |= MV_HP_ERRATA_60X1C0;
 			break;
 		default:
-			dev_printk(KERN_WARNING, &pdev->dev,
-			   "Applying 60X1C0 workarounds to unknown rev\n");
+			dev_warn(&pdev->dev,
+				 "Applying 60X1C0 workarounds to unknown rev\n");
 			hp_flags |= MV_HP_ERRATA_60X1C0;
 			break;
 		}
@@ -3838,8 +3863,7 @@ static int mv_chip_id(struct ata_host *host, unsigned int board_idx)
 		break;
 
 	default:
-		dev_printk(KERN_ERR, host->dev,
-			   "BUG: invalid board index %u\n", board_idx);
+		dev_err(host->dev, "BUG: invalid board index %u\n", board_idx);
 		return 1;
 	}
 
@@ -3994,7 +4018,6 @@ static void mv_conf_mbus_windows(struct mv_host_priv *hpriv,
  */
 static int mv_platform_probe(struct platform_device *pdev)
 {
-	static int printed_version;
 	const struct mv_sata_platform_data *mv_platform_data;
 	const struct ata_port_info *ppi[] =
 	    { &mv_port_info[chip_soc], NULL };
@@ -4003,8 +4026,7 @@ static int mv_platform_probe(struct platform_device *pdev)
 	struct resource *res;
 	int n_ports, rc;
 
-	if (!printed_version++)
-		dev_printk(KERN_INFO, &pdev->dev, "version " DRV_VERSION "\n");
+	ata_print_version_once(&pdev->dev, DRV_VERSION);
 
 	/*
 	 * Simple resource validation ..
@@ -4062,9 +4084,8 @@ static int mv_platform_probe(struct platform_device *pdev)
 	if (rc)
 		goto err;
 
-	dev_printk(KERN_INFO, &pdev->dev,
-		   "slots %u ports %d\n", (unsigned)MV_MAX_Q_DEPTH,
-		   host->n_ports);
+	dev_info(&pdev->dev, "slots %u ports %d\n",
+		 (unsigned)MV_MAX_Q_DEPTH, host->n_ports);
 
 	return ata_host_activate(host, platform_get_irq(pdev, 0), mv_interrupt,
 				 IRQF_SHARED, &mv6_sht);
@@ -4188,22 +4209,21 @@ static int pci_go_64(struct pci_dev *pdev)
 		if (rc) {
 			rc = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
 			if (rc) {
-				dev_printk(KERN_ERR, &pdev->dev,
-					   "64-bit DMA enable failed\n");
+				dev_err(&pdev->dev,
+					"64-bit DMA enable failed\n");
 				return rc;
 			}
 		}
 	} else {
 		rc = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
 		if (rc) {
-			dev_printk(KERN_ERR, &pdev->dev,
-				   "32-bit DMA enable failed\n");
+			dev_err(&pdev->dev, "32-bit DMA enable failed\n");
 			return rc;
 		}
 		rc = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
 		if (rc) {
-			dev_printk(KERN_ERR, &pdev->dev,
-				   "32-bit consistent DMA enable failed\n");
+			dev_err(&pdev->dev,
+				"32-bit consistent DMA enable failed\n");
 			return rc;
 		}
 	}
@@ -4247,10 +4267,9 @@ static void mv_print_info(struct ata_host *host)
 	else
 		gen = "?";
 
-	dev_printk(KERN_INFO, &pdev->dev,
-	       "Gen-%s %u slots %u ports %s mode IRQ via %s\n",
-	       gen, (unsigned)MV_MAX_Q_DEPTH, host->n_ports,
-	       scc_s, (MV_HP_FLAG_MSI & hpriv->hp_flags) ? "MSI" : "INTx");
+	dev_info(&pdev->dev, "Gen-%s %u slots %u ports %s mode IRQ via %s\n",
+		 gen, (unsigned)MV_MAX_Q_DEPTH, host->n_ports,
+		 scc_s, (MV_HP_FLAG_MSI & hpriv->hp_flags) ? "MSI" : "INTx");
 }
 
 /**
@@ -4264,15 +4283,13 @@ static void mv_print_info(struct ata_host *host)
 static int mv_pci_init_one(struct pci_dev *pdev,
 			   const struct pci_device_id *ent)
 {
-	static int printed_version;
 	unsigned int board_idx = (unsigned int)ent->driver_data;
 	const struct ata_port_info *ppi[] = { &mv_port_info[board_idx], NULL };
 	struct ata_host *host;
 	struct mv_host_priv *hpriv;
 	int n_ports, port, rc;
 
-	if (!printed_version++)
-		dev_printk(KERN_INFO, &pdev->dev, "version " DRV_VERSION "\n");
+	ata_print_version_once(&pdev->dev, DRV_VERSION);
 
 	/* allocate host */
 	n_ports = mv_get_hc_count(ppi[0]->flags) * MV_PORTS_PER_HC;

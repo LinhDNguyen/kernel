@@ -21,6 +21,7 @@
 #include <linux/err.h>
 #include <linux/pwm.h>
 #include <linux/leds_pwm.h>
+#include <linux/slab.h>
 
 struct led_pwm_data {
 	struct led_classdev	cdev;
@@ -68,6 +69,7 @@ static int led_pwm_probe(struct platform_device *pdev)
 		led_dat->pwm = pwm_request(cur_led->pwm_id,
 				cur_led->name);
 		if (IS_ERR(led_dat->pwm)) {
+			ret = PTR_ERR(led_dat->pwm);
 			dev_err(&pdev->dev, "unable to request PWM %d\n",
 					cur_led->pwm_id);
 			goto err;

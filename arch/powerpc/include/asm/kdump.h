@@ -3,7 +3,6 @@
 
 #include <asm/page.h>
 
-/* Kdump kernel runs at 32 MB, change at your peril. */
 #define KDUMP_KERNELBASE	0x2000000
 
 /* How many bytes to reserve at zero for kdump. The reserve limit should

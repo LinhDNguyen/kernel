@@ -21,11 +21,6 @@
 #ifndef __ASM_ARCH_SYSTEM_H
 #define __ASM_ARCH_SYSTEM_H
 
-#include <linux/io.h>
-#include <mach/hardware.h>
-#include <mach/platform.h>
-#include <mach/sri.h>
-
 static inline void arch_idle(void)
 {
 	/*

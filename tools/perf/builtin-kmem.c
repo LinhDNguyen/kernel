@@ -92,23 +92,18 @@ static void setup_cpunode_map(void)
 	if (!dir1)
 		return;
 
-	while (true) {
-		dent1 = readdir(dir1);
-		if (!dent1)
-			break;
-
-		if (sscanf(dent1->d_name, "node%u", &mem) < 1)
+	while ((dent1 = readdir(dir1)) != NULL) {
+		if (dent1->d_type != DT_DIR ||
+		    sscanf(dent1->d_name, "node%u", &mem) < 1)
 			continue;
 
 		snprintf(buf, PATH_MAX, "%s/%s", PATH_SYS_NODE, dent1->d_name);
 		dir2 = opendir(buf);
 		if (!dir2)
 			continue;
-		while (true) {
-			dent2 = readdir(dir2);
-			if (!dent2)
-				break;
-			if (sscanf(dent2->d_name, "cpu%u", &cpu) < 1)
+		while ((dent2 = readdir(dir2)) != NULL) {
+			if (dent2->d_type != DT_LNK ||
+			    sscanf(dent2->d_name, "cpu%u", &cpu) < 1)
 				continue;
 			cpunode_map[cpu] = mem;
 		}
@@ -280,9 +275,8 @@ static void process_free_event(void *data,
 	s_alloc->alloc_cpu = -1;
 }
 
-static void
-process_raw_event(event_t *raw_event __used, void *data,
-		  int cpu, u64 timestamp, struct thread *thread)
+static void process_raw_event(union perf_event *raw_event __used, void *data,
+			      int cpu, u64 timestamp, struct thread *thread)
 {
 	struct event *event;
 	int type;
@@ -309,25 +303,13 @@ process_raw_event(event_t *raw_event __used, void *data,
 	}
 }
 
-static int process_sample_event(event_t *event, struct perf_session *session)
+static int process_sample_event(union perf_event *event,
+				struct perf_sample *sample,
+				struct perf_evsel *evsel __used,
+				struct perf_session *session)
 {
-	struct sample_data data;
-	struct thread *thread;
+	struct thread *thread = perf_session__findnew(session, event->ip.pid);
 
-	memset(&data, 0, sizeof(data));
-	data.time = -1;
-	data.cpu = -1;
-	data.period = 1;
-
-	event__parse_sample(event, session->sample_type, &data);
-
-	dump_printf("(IP, %d): %d/%d: %p period: %Ld\n",
-		event->header.misc,
-		data.pid, data.tid,
-		(void *)(long)data.ip,
-		(long long)data.period);
-
-	thread = perf_session__findnew(session, event->ip.pid);
 	if (thread == NULL) {
 		pr_debug("problem processing %d event, skipping it.\n",
 			 event->header.type);
@@ -336,28 +318,16 @@ static int process_sample_event(event_t *event, struct perf_session *session)
 
 	dump_printf(" ... thread: %s:%d\n", thread->comm, thread->pid);
 
-	process_raw_event(event, data.raw_data, data.cpu,
-			  data.time, thread);
-
-	return 0;
-}
-
-static int sample_type_check(struct perf_session *session)
-{
-	if (!(session->sample_type & PERF_SAMPLE_RAW)) {
-		fprintf(stderr,
-			"No trace sample to read. Did you call perf record "
-			"without -R?");
-		return -1;
-	}
+	process_raw_event(event, sample->raw_data, sample->cpu,
+			  sample->time, thread);
 
 	return 0;
 }
 
 static struct perf_event_ops event_ops = {
-	.process_sample_event	= process_sample_event,
-	.process_comm_event	= event__process_comm,
-	.sample_type_check	= sample_type_check,
+	.sample			= process_sample_event,
+	.comm			= perf_event__process_comm,
+	.ordered_samples	= true,
 };
 
 static double fragmentation(unsigned long n_req, unsigned long n_alloc)
@@ -372,6 +342,7 @@ static void __print_result(struct rb_root *root, struct perf_session *session,
 			   int n_lines, int is_caller)
 {
 	struct rb_node *next;
+	struct machine *machine;
 
 	printf("%.102s\n", graph_dotted_line);
 	printf(" %-34s |",  is_caller ? "Callsite": "Alloc Ptr");
@@ -380,25 +351,31 @@ static void __print_result(struct rb_root *root, struct perf_session *session,
 
 	next = rb_first(root);
 
+	machine = perf_session__find_host_machine(session);
+	if (!machine) {
+		pr_err("__print_result: couldn't find kernel information\n");
+		return;
+	}
 	while (next && n_lines--) {
 		struct alloc_stat *data = rb_entry(next, struct alloc_stat,
 						   node);
 		struct symbol *sym = NULL;
+		struct map *map;
 		char buf[BUFSIZ];
 		u64 addr;
 
 		if (is_caller) {
 			addr = data->call_site;
 			if (!raw_ip)
-				sym = map_groups__find_function(&session->kmaps, session, addr, NULL);
+				sym = machine__find_kernel_function(machine, addr, &map, NULL);
 		} else
 			addr = data->ptr;
 
 		if (sym != NULL)
-			snprintf(buf, sizeof(buf), "%s+%Lx", sym->name,
-				 addr - sym->start);
+			snprintf(buf, sizeof(buf), "%s+%" PRIx64 "", sym->name,
+				 addr - map->unmap_ip(map, sym->start));
 		else
-			snprintf(buf, sizeof(buf), "%#Lx", addr);
+			snprintf(buf, sizeof(buf), "%#" PRIx64 "", addr);
 		printf(" %-34s |", buf);
 
 		printf(" %9llu/%-5lu | %9llu/%-5lu | %8lu | %8lu | %6.3f%%\n",
@@ -504,10 +481,17 @@ static void sort_result(void)
 
 static int __cmd_kmem(void)
 {
-	int err;
-	struct perf_session *session = perf_session__new(input_name, O_RDONLY, 0);
+	int err = -EINVAL;
+	struct perf_session *session = perf_session__new(input_name, O_RDONLY,
+							 0, false, &event_ops);
 	if (session == NULL)
 		return -ENOMEM;
+
+	if (perf_session__create_kernel_maps(session) < 0)
+		goto out_delete;
+
+	if (!perf_session__has_traces(session, "kmem record"))
+		goto out_delete;
 
 	setup_pager();
 	err = perf_session__process_events(session, &event_ops);
@@ -736,7 +720,6 @@ static const char *record_args[] = {
 	"record",
 	"-a",
 	"-R",
-	"-M",
 	"-f",
 	"-c", "1",
 	"-e", "kmem:kmalloc",
@@ -754,6 +737,9 @@ static int __cmd_record(int argc, const char **argv)
 
 	rec_argc = ARRAY_SIZE(record_args) + argc - 1;
 	rec_argv = calloc(rec_argc + 1, sizeof(char *));
+
+	if (rec_argv == NULL)
+		return -ENOMEM;
 
 	for (i = 0; i < ARRAY_SIZE(record_args); i++)
 		rec_argv[i] = strdup(record_args[i]);

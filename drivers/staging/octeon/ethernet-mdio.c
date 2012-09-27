@@ -27,6 +27,7 @@
 #include <linux/kernel.h>
 #include <linux/ethtool.h>
 #include <linux/phy.h>
+#include <linux/ratelimit.h>
 
 #include <net/dst.h>
 
@@ -91,16 +92,14 @@ const struct ethtool_ops cvm_oct_ethtool_ops = {
 	.set_settings = cvm_oct_set_settings,
 	.nway_reset = cvm_oct_nway_reset,
 	.get_link = ethtool_op_get_link,
-	.get_sg = ethtool_op_get_sg,
-	.get_tx_csum = ethtool_op_get_tx_csum,
 };
 
 /**
- * IOCTL support for PHY control
- *
+ * cvm_oct_ioctl - IOCTL support for PHY control
  * @dev:    Device to change
  * @rq:     the request
  * @cmd:    the command
+ *
  * Returns Zero on success
  */
 int cvm_oct_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
@@ -113,7 +112,7 @@ int cvm_oct_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	if (!priv->phydev)
 		return -EINVAL;
 
-	return phy_mii_ioctl(priv->phydev, if_mii(rq), cmd);
+	return phy_mii_ioctl(priv->phydev, rq, cmd);
 }
 
 static void cvm_oct_adjust_link(struct net_device *dev)
@@ -131,29 +130,29 @@ static void cvm_oct_adjust_link(struct net_device *dev)
 		if (priv->last_link) {
 			netif_carrier_on(dev);
 			if (priv->queue != -1)
-				DEBUGPRINT("%s: %u Mbps %s duplex, "
-					   "port %2d, queue %2d\n",
-					   dev->name, priv->phydev->speed,
-					   priv->phydev->duplex ?
-						"Full" : "Half",
-					   priv->port, priv->queue);
+				printk_ratelimited("%s: %u Mbps %s duplex, "
+						   "port %2d, queue %2d\n",
+						   dev->name, priv->phydev->speed,
+						   priv->phydev->duplex ?
+						   "Full" : "Half",
+						   priv->port, priv->queue);
 			else
-				DEBUGPRINT("%s: %u Mbps %s duplex, "
-					   "port %2d, POW\n",
-					   dev->name, priv->phydev->speed,
-					   priv->phydev->duplex ?
-						"Full" : "Half",
-					   priv->port);
+				printk_ratelimited("%s: %u Mbps %s duplex, "
+						   "port %2d, POW\n",
+						   dev->name, priv->phydev->speed,
+						   priv->phydev->duplex ?
+						   "Full" : "Half",
+						   priv->port);
 		} else {
 			netif_carrier_off(dev);
-			DEBUGPRINT("%s: Link down\n", dev->name);
+			printk_ratelimited("%s: Link down\n", dev->name);
 		}
 	}
 }
 
 
 /**
- * Setup the PHY
+ * cvm_oct_phy_setup_device - setup the PHY
  *
  * @dev:    Device to setup
  *

@@ -31,9 +31,10 @@
  *
  */
 #include <linux/kernel.h>
+#include <linux/slab.h>
+#include <linux/ratelimit.h>
 
 #include "rds.h"
-#include "rdma.h"
 #include "iw.h"
 
 
@@ -83,7 +84,8 @@ static int rds_iw_map_fastreg(struct rds_iw_mr_pool *pool,
 static void rds_iw_free_fastreg(struct rds_iw_mr_pool *pool, struct rds_iw_mr *ibmr);
 static unsigned int rds_iw_unmap_fastreg_list(struct rds_iw_mr_pool *pool,
 			struct list_head *unmap_list,
-			struct list_head *kill_list);
+			struct list_head *kill_list,
+			int *unpinned);
 static void rds_iw_destroy_fastreg(struct rds_iw_mr_pool *pool, struct rds_iw_mr *ibmr);
 
 static int rds_iw_get_device(struct rds_sock *rs, struct rds_iw_device **rds_iwdev, struct rdma_cm_id **cm_id)
@@ -122,7 +124,7 @@ static int rds_iw_get_device(struct rds_sock *rs, struct rds_iw_device **rds_iwd
 #else
 			/* FIXME - needs to compare the local and remote
 			 * ipaddr/port tuple, but the ipaddr is the only
-			 * available infomation in the rds_sock (as the rest are
+			 * available information in the rds_sock (as the rest are
 			 * zero'ed.  It doesn't appear to be properly populated
 			 * during connection setup...
 			 */
@@ -157,7 +159,8 @@ static int rds_iw_add_cm_id(struct rds_iw_device *rds_iwdev, struct rdma_cm_id *
 	return 0;
 }
 
-void rds_iw_remove_cm_id(struct rds_iw_device *rds_iwdev, struct rdma_cm_id *cm_id)
+static void rds_iw_remove_cm_id(struct rds_iw_device *rds_iwdev,
+				struct rdma_cm_id *cm_id)
 {
 	struct rds_iw_cm_id *i_cm_id;
 
@@ -206,9 +209,9 @@ void rds_iw_add_conn(struct rds_iw_device *rds_iwdev, struct rds_connection *con
 	BUG_ON(list_empty(&ic->iw_node));
 	list_del(&ic->iw_node);
 
-	spin_lock_irq(&rds_iwdev->spinlock);
+	spin_lock(&rds_iwdev->spinlock);
 	list_add_tail(&ic->iw_node, &rds_iwdev->conn_list);
-	spin_unlock_irq(&rds_iwdev->spinlock);
+	spin_unlock(&rds_iwdev->spinlock);
 	spin_unlock_irq(&iw_nodev_conns_lock);
 
 	ic->rds_iwdev = rds_iwdev;
@@ -497,7 +500,7 @@ static int rds_iw_flush_mr_pool(struct rds_iw_mr_pool *pool, int free_all)
 	LIST_HEAD(unmap_list);
 	LIST_HEAD(kill_list);
 	unsigned long flags;
-	unsigned int nfreed = 0, ncleaned = 0, free_goal;
+	unsigned int nfreed = 0, ncleaned = 0, unpinned = 0, free_goal;
 	int ret = 0;
 
 	rds_iw_stats_inc(s_iw_rdma_mr_pool_flush);
@@ -522,7 +525,8 @@ static int rds_iw_flush_mr_pool(struct rds_iw_mr_pool *pool, int free_all)
 	 * will be destroyed by the unmap function.
 	 */
 	if (!list_empty(&unmap_list)) {
-		ncleaned = rds_iw_unmap_fastreg_list(pool, &unmap_list, &kill_list);
+		ncleaned = rds_iw_unmap_fastreg_list(pool, &unmap_list,
+						     &kill_list, &unpinned);
 		/* If we've been asked to destroy all MRs, move those
 		 * that were simply cleaned to the kill list */
 		if (free_all)
@@ -546,6 +550,7 @@ static int rds_iw_flush_mr_pool(struct rds_iw_mr_pool *pool, int free_all)
 		spin_unlock_irqrestore(&pool->list_lock, flags);
 	}
 
+	atomic_sub(unpinned, &pool->free_pinned);
 	atomic_sub(ncleaned, &pool->dirty_count);
 	atomic_sub(nfreed, &pool->item_count);
 
@@ -728,8 +733,8 @@ static int rds_iw_rdma_build_fastreg(struct rds_iw_mapping *mapping)
 	failed_wr = &f_wr;
 	ret = ib_post_send(ibmr->cm_id->qp, &f_wr, &failed_wr);
 	BUG_ON(failed_wr != &f_wr);
-	if (ret && printk_ratelimit())
-		printk(KERN_WARNING "RDS/IW: %s:%d ib_post_send returned %d\n",
+	if (ret)
+		printk_ratelimited(KERN_WARNING "RDS/IW: %s:%d ib_post_send returned %d\n",
 			__func__, __LINE__, ret);
 	return ret;
 }
@@ -750,8 +755,8 @@ static int rds_iw_rdma_fastreg_inv(struct rds_iw_mr *ibmr)
 
 	failed_wr = &s_wr;
 	ret = ib_post_send(ibmr->cm_id->qp, &s_wr, &failed_wr);
-	if (ret && printk_ratelimit()) {
-		printk(KERN_WARNING "RDS/IW: %s:%d ib_post_send returned %d\n",
+	if (ret) {
+		printk_ratelimited(KERN_WARNING "RDS/IW: %s:%d ib_post_send returned %d\n",
 			__func__, __LINE__, ret);
 		goto out;
 	}
@@ -826,7 +831,8 @@ static void rds_iw_free_fastreg(struct rds_iw_mr_pool *pool,
 
 static unsigned int rds_iw_unmap_fastreg_list(struct rds_iw_mr_pool *pool,
 				struct list_head *unmap_list,
-				struct list_head *kill_list)
+				struct list_head *kill_list,
+				int *unpinned)
 {
 	struct rds_iw_mapping *mapping, *next;
 	unsigned int ncleaned = 0;
@@ -853,6 +859,7 @@ static unsigned int rds_iw_unmap_fastreg_list(struct rds_iw_mr_pool *pool,
 
 		spin_lock_irqsave(&pool->list_lock, flags);
 		list_for_each_entry_safe(mapping, next, unmap_list, m_list) {
+			*unpinned += mapping->m_sg.len;
 			list_move(&mapping->m_list, &laundered);
 			ncleaned++;
 		}

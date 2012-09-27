@@ -308,6 +308,13 @@ struct assign_storage_sccb {
 	u16 rn;
 } __packed;
 
+int arch_get_memory_phys_device(unsigned long start_pfn)
+{
+	if (!rzm)
+		return 0;
+	return PFN_PHYS(start_pfn) >> ilog2(rzm);
+}
+
 static unsigned long long rn2addr(u16 rn)
 {
 	return (unsigned long long) (rn - 1) * rzm;
@@ -376,8 +383,10 @@ static int sclp_attach_storage(u8 id)
 	switch (sccb->header.response_code) {
 	case 0x0020:
 		set_bit(id, sclp_storage_ids);
-		for (i = 0; i < sccb->assigned; i++)
-			sclp_unassign_storage(sccb->entries[i] >> 16);
+		for (i = 0; i < sccb->assigned; i++) {
+			if (sccb->entries[i])
+				sclp_unassign_storage(sccb->entries[i] >> 16);
+		}
 		break;
 	default:
 		rc = -EIO;
@@ -511,6 +520,8 @@ static void __init insert_increment(u16 rn, int standby, int assigned)
 		return;
 	new_incr->rn = rn;
 	new_incr->standby = standby;
+	if (!standby)
+		new_incr->usecount = 1;
 	last_rn = 0;
 	prev = &sclp_mem_list;
 	list_for_each_entry(incr, &sclp_mem_list, list) {

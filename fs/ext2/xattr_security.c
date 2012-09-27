@@ -4,6 +4,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
@@ -46,14 +47,15 @@ ext2_xattr_security_set(struct dentry *dentry, const char *name,
 }
 
 int
-ext2_init_security(struct inode *inode, struct inode *dir)
+ext2_init_security(struct inode *inode, struct inode *dir,
+		   const struct qstr *qstr)
 {
 	int err;
 	size_t len;
 	void *value;
 	char *name;
 
-	err = security_inode_init_security(inode, dir, &name, &value, &len);
+	err = security_inode_init_security(inode, dir, qstr, &name, &value, &len);
 	if (err) {
 		if (err == -EOPNOTSUPP)
 			return 0;
@@ -66,7 +68,7 @@ ext2_init_security(struct inode *inode, struct inode *dir)
 	return err;
 }
 
-struct xattr_handler ext2_xattr_security_handler = {
+const struct xattr_handler ext2_xattr_security_handler = {
 	.prefix	= XATTR_SECURITY_PREFIX,
 	.list	= ext2_xattr_security_list,
 	.get	= ext2_xattr_security_get,

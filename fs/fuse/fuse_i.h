@@ -21,6 +21,7 @@
 #include <linux/rwsem.h>
 #include <linux/rbtree.h>
 #include <linux/poll.h>
+#include <linux/workqueue.h>
 
 /** Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
@@ -53,6 +54,12 @@ extern struct mutex fuse_mutex;
 extern unsigned max_user_bgreq;
 extern unsigned max_user_congthresh;
 
+/* One forget request */
+struct fuse_forget_link {
+	struct fuse_forget_one forget_one;
+	struct fuse_forget_link *next;
+};
+
 /** FUSE inode */
 struct fuse_inode {
 	/** Inode data */
@@ -66,7 +73,7 @@ struct fuse_inode {
 	u64 nlookup;
 
 	/** The request used for sending the FORGET message */
-	struct fuse_req *forget_req;
+	struct fuse_forget_link *forget;
 
 	/** Time in jiffies until the file attributes are valid */
 	u64 i_time;
@@ -128,6 +135,9 @@ struct fuse_file {
 
 	/** Wait queue head for poll */
 	wait_queue_head_t poll_wait;
+
+	/** Has flock been performed on this file? */
+	bool flock:1;
 };
 
 /** One input argument of a request */
@@ -176,6 +186,9 @@ struct fuse_out {
 
 	/** Zero partially or not copied pages */
 	unsigned page_zeroing:1;
+
+	/** Pages may be replaced with new ones */
+	unsigned page_replace:1;
 
 	/** Number or arguments */
 	unsigned numargs;
@@ -252,15 +265,16 @@ struct fuse_req {
 
 	/** Data for asynchronous requests */
 	union {
-		struct fuse_forget_in forget_in;
 		struct {
-			struct fuse_release_in in;
+			union {
+				struct fuse_release_in in;
+				struct work_struct work;
+			};
 			struct path path;
 		} release;
 		struct fuse_init_in init_in;
 		struct fuse_init_out init_out;
 		struct cuse_init_in cuse_init_in;
-		struct cuse_init_out cuse_init_out;
 		struct {
 			struct fuse_read_in in;
 			u64 attr_ver;
@@ -269,6 +283,7 @@ struct fuse_req {
 			struct fuse_write_in in;
 			struct fuse_write_out out;
 		} write;
+		struct fuse_notify_retrieve_in retrieve_in;
 		struct fuse_lk_in lk_in;
 	} misc;
 
@@ -365,6 +380,13 @@ struct fuse_conn {
 	/** Pending interrupts */
 	struct list_head interrupts;
 
+	/** Queue of pending forgets */
+	struct fuse_forget_link forget_list_head;
+	struct fuse_forget_link *forget_list_tail;
+
+	/** Batching of FORGET requests (positive indicates FORGET batch) */
+	int forget_batch;
+
 	/** Flag indicating if connection is blocked.  This will be
 	    the case before the INIT reply is received, and if there
 	    are too many outstading backgrounds requests */
@@ -429,7 +451,7 @@ struct fuse_conn {
 	/** Is removexattr not implemented by fs? */
 	unsigned no_removexattr:1;
 
-	/** Are file locking primitives not implemented by fs? */
+	/** Are posix file locking primitives not implemented by fs? */
 	unsigned no_lock:1;
 
 	/** Is access not implemented by fs? */
@@ -452,6 +474,9 @@ struct fuse_conn {
 
 	/** Don't apply umask to creation modes */
 	unsigned dont_mask:1;
+
+	/** Are BSD file locking primitives not implemented by fs? */
+	unsigned no_flock:1;
 
 	/** The number of requests waiting for completion */
 	atomic_t num_waiting;
@@ -539,8 +564,10 @@ int fuse_lookup_name(struct super_block *sb, u64 nodeid, struct qstr *name,
 /**
  * Send FORGET command
  */
-void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
-		      u64 nodeid, u64 nlookup);
+void fuse_queue_forget(struct fuse_conn *fc, struct fuse_forget_link *forget,
+		       u64 nodeid, u64 nlookup);
+
+struct fuse_forget_link *fuse_alloc_forget(void);
 
 /**
  * Initialize READ or READDIR request
@@ -568,8 +595,8 @@ void fuse_release_common(struct file *file, int opcode);
 /**
  * Send FSYNC or FSYNCDIR request
  */
-int fuse_fsync_common(struct file *file, struct dentry *de, int datasync,
-		      int isdir);
+int fuse_fsync_common(struct file *file, loff_t start, loff_t end,
+		      int datasync, int isdir);
 
 /**
  * Notify poll wakeup
@@ -651,11 +678,6 @@ void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req);
  * Send a request (synchronous)
  */
 void fuse_request_send(struct fuse_conn *fc, struct fuse_req *req);
-
-/**
- * Send a request with no reply
- */
-void fuse_request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
  * Send a request in the background
@@ -745,5 +767,7 @@ long fuse_do_ioctl(struct file *file, unsigned int cmd, unsigned long arg,
 		   unsigned int flags);
 unsigned fuse_file_poll(struct file *file, poll_table *wait);
 int fuse_dev_release(struct inode *inode, struct file *file);
+
+void fuse_write_update_size(struct inode *inode, loff_t pos);
 
 #endif /* _FS_FUSE_I_H */

@@ -95,7 +95,7 @@ static const struct mt9v022_datafmt mt9v022_colour_fmts[] = {
 static const struct mt9v022_datafmt mt9v022_monochrome_fmts[] = {
 	/* Order important - see above */
 	{V4L2_MBUS_FMT_Y10_1X10, V4L2_COLORSPACE_JPEG},
-	{V4L2_MBUS_FMT_GREY8_1X8, V4L2_COLORSPACE_JPEG},
+	{V4L2_MBUS_FMT_Y8_1X8, V4L2_COLORSPACE_JPEG},
 };
 
 struct mt9v022 {
@@ -184,7 +184,7 @@ static int mt9v022_init(struct i2c_client *client)
 
 static int mt9v022_s_stream(struct v4l2_subdev *sd, int enable)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 
 	if (enable)
@@ -228,7 +228,7 @@ static int mt9v022_set_bus_param(struct soc_camera_device *icd,
 
 	flags = soc_camera_apply_sensor_flags(icl, flags);
 
-	if (flags & SOCAM_PCLK_SAMPLE_RISING)
+	if (flags & SOCAM_PCLK_SAMPLE_FALLING)
 		pixclk |= 0x10;
 
 	if (!(flags & SOCAM_HSYNC_ACTIVE_HIGH))
@@ -257,24 +257,23 @@ static int mt9v022_set_bus_param(struct soc_camera_device *icd,
 static unsigned long mt9v022_query_bus_param(struct soc_camera_device *icd)
 {
 	struct soc_camera_link *icl = to_soc_camera_link(icd);
-	unsigned int width_flag;
-
-	if (icl->query_bus_param)
-		width_flag = icl->query_bus_param(icl) &
-			SOCAM_DATAWIDTH_MASK;
-	else
-		width_flag = SOCAM_DATAWIDTH_10;
-
-	return SOCAM_PCLK_SAMPLE_RISING | SOCAM_PCLK_SAMPLE_FALLING |
+	unsigned int flags = SOCAM_MASTER | SOCAM_SLAVE |
+		SOCAM_PCLK_SAMPLE_RISING | SOCAM_PCLK_SAMPLE_FALLING |
 		SOCAM_HSYNC_ACTIVE_HIGH | SOCAM_HSYNC_ACTIVE_LOW |
 		SOCAM_VSYNC_ACTIVE_HIGH | SOCAM_VSYNC_ACTIVE_LOW |
-		SOCAM_DATA_ACTIVE_HIGH | SOCAM_MASTER | SOCAM_SLAVE |
-		width_flag;
+		SOCAM_DATA_ACTIVE_HIGH;
+
+	if (icl->query_bus_param)
+		flags |= icl->query_bus_param(icl) & SOCAM_DATAWIDTH_MASK;
+	else
+		flags |= SOCAM_DATAWIDTH_10;
+
+	return soc_camera_apply_sensor_flags(icl, flags);
 }
 
 static int mt9v022_s_crop(struct v4l2_subdev *sd, struct v4l2_crop *a)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 	struct v4l2_rect rect = a->c;
 	int ret;
@@ -326,7 +325,7 @@ static int mt9v022_s_crop(struct v4l2_subdev *sd, struct v4l2_crop *a)
 	if (ret < 0)
 		return ret;
 
-	dev_dbg(&client->dev, "Frame %ux%u pixel\n", rect.width, rect.height);
+	dev_dbg(&client->dev, "Frame %dx%d pixel\n", rect.width, rect.height);
 
 	mt9v022->rect = rect;
 
@@ -335,7 +334,7 @@ static int mt9v022_s_crop(struct v4l2_subdev *sd, struct v4l2_crop *a)
 
 static int mt9v022_g_crop(struct v4l2_subdev *sd, struct v4l2_crop *a)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 
 	a->c	= mt9v022->rect;
@@ -361,7 +360,7 @@ static int mt9v022_cropcap(struct v4l2_subdev *sd, struct v4l2_cropcap *a)
 static int mt9v022_g_fmt(struct v4l2_subdev *sd,
 			 struct v4l2_mbus_framefmt *mf)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 
 	mf->width	= mt9v022->rect.width;
@@ -376,7 +375,7 @@ static int mt9v022_g_fmt(struct v4l2_subdev *sd,
 static int mt9v022_s_fmt(struct v4l2_subdev *sd,
 			 struct v4l2_mbus_framefmt *mf)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 	struct v4l2_crop a = {
 		.c = {
@@ -393,7 +392,7 @@ static int mt9v022_s_fmt(struct v4l2_subdev *sd,
 	 * icd->try_fmt(), datawidth is from our supported format list
 	 */
 	switch (mf->code) {
-	case V4L2_MBUS_FMT_GREY8_1X8:
+	case V4L2_MBUS_FMT_Y8_1X8:
 	case V4L2_MBUS_FMT_Y10_1X10:
 		if (mt9v022->model != V4L2_IDENT_MT9V022IX7ATM)
 			return -EINVAL;
@@ -402,9 +401,6 @@ static int mt9v022_s_fmt(struct v4l2_subdev *sd,
 	case V4L2_MBUS_FMT_SBGGR10_1X10:
 		if (mt9v022->model != V4L2_IDENT_MT9V022IX7ATC)
 			return -EINVAL;
-		break;
-	case 0:
-		/* No format change, only geometry */
 		break;
 	default:
 		return -EINVAL;
@@ -426,7 +422,7 @@ static int mt9v022_s_fmt(struct v4l2_subdev *sd,
 static int mt9v022_try_fmt(struct v4l2_subdev *sd,
 			   struct v4l2_mbus_framefmt *mf)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 	const struct mt9v022_datafmt *fmt;
 	int align = mf->code == V4L2_MBUS_FMT_SBGGR8_1X8 ||
@@ -452,7 +448,7 @@ static int mt9v022_try_fmt(struct v4l2_subdev *sd,
 static int mt9v022_g_chip_ident(struct v4l2_subdev *sd,
 				struct v4l2_dbg_chip_ident *id)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 
 	if (id->match.type != V4L2_CHIP_MATCH_I2C_ADDR)
@@ -471,7 +467,7 @@ static int mt9v022_g_chip_ident(struct v4l2_subdev *sd,
 static int mt9v022_g_register(struct v4l2_subdev *sd,
 			      struct v4l2_dbg_register *reg)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	if (reg->match.type != V4L2_CHIP_MATCH_I2C_ADDR || reg->reg > 0xff)
 		return -EINVAL;
@@ -491,7 +487,7 @@ static int mt9v022_g_register(struct v4l2_subdev *sd,
 static int mt9v022_s_register(struct v4l2_subdev *sd,
 			      struct v4l2_dbg_register *reg)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 
 	if (reg->match.type != V4L2_CHIP_MATCH_I2C_ADDR || reg->reg > 0xff)
 		return -EINVAL;
@@ -569,7 +565,7 @@ static struct soc_camera_ops mt9v022_ops = {
 
 static int mt9v022_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	const struct v4l2_queryctrl *qctrl;
 	unsigned long range;
 	int data;
@@ -626,7 +622,7 @@ static int mt9v022_g_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 static int mt9v022_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 {
 	int data;
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	const struct v4l2_queryctrl *qctrl;
 
 	qctrl = soc_camera_find_qctrl(&mt9v022_ops, ctrl->id);
@@ -732,9 +728,9 @@ static int mt9v022_video_probe(struct soc_camera_device *icd,
 	int ret;
 	unsigned long flags;
 
-	if (!icd->dev.parent ||
-	    to_soc_camera_host(icd->dev.parent)->nr != icd->iface)
-		return -ENODEV;
+	/* We must have a parent by now. And it cannot be a wrong one. */
+	BUG_ON(!icd->parent ||
+	       to_soc_camera_host(icd->parent)->nr != icd->iface);
 
 	/* Read out the chip version register */
 	data = reg_read(client, MT9V022_CHIP_VERSION);
@@ -813,15 +809,15 @@ static void mt9v022_video_remove(struct soc_camera_device *icd)
 {
 	struct soc_camera_link *icl = to_soc_camera_link(icd);
 
-	dev_dbg(&icd->dev, "Video removed: %p, %p\n",
-		icd->dev.parent, icd->vdev);
+	dev_dbg(icd->pdev, "Video removed: %p, %p\n",
+		icd->parent, icd->vdev);
 	if (icl->free_bus)
 		icl->free_bus(icl);
 }
 
 static int mt9v022_g_skip_top_lines(struct v4l2_subdev *sd, u32 *lines)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 
 	*lines = mt9v022->y_skip_top;
@@ -839,13 +835,13 @@ static struct v4l2_subdev_core_ops mt9v022_subdev_core_ops = {
 #endif
 };
 
-static int mt9v022_enum_fmt(struct v4l2_subdev *sd, int index,
+static int mt9v022_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
 			    enum v4l2_mbus_pixelcode *code)
 {
-	struct i2c_client *client = sd->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct mt9v022 *mt9v022 = to_mt9v022(client);
 
-	if ((unsigned int)index >= mt9v022->num_fmts)
+	if (index >= mt9v022->num_fmts)
 		return -EINVAL;
 
 	*code = mt9v022->fmts[index].code;
@@ -921,7 +917,6 @@ static int mt9v022_probe(struct i2c_client *client,
 	ret = mt9v022_video_probe(icd, client);
 	if (ret) {
 		icd->ops = NULL;
-		i2c_set_clientdata(client, NULL);
 		kfree(mt9v022);
 	}
 
@@ -935,8 +930,6 @@ static int mt9v022_remove(struct i2c_client *client)
 
 	icd->ops = NULL;
 	mt9v022_video_remove(icd);
-	i2c_set_clientdata(client, NULL);
-	client->driver = NULL;
 	kfree(mt9v022);
 
 	return 0;

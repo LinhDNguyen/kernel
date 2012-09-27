@@ -110,12 +110,12 @@ static inline void check_stack(void)
 static void
 stack_trace_call(unsigned long ip, unsigned long parent_ip)
 {
-	int cpu, resched;
+	int cpu;
 
 	if (unlikely(!ftrace_enabled || stack_trace_disabled))
 		return;
 
-	resched = ftrace_preempt_disable();
+	preempt_disable_notrace();
 
 	cpu = raw_smp_processor_id();
 	/* no atomic needed, we only modify this variable by this cpu */
@@ -127,12 +127,13 @@ stack_trace_call(unsigned long ip, unsigned long parent_ip)
  out:
 	per_cpu(trace_active, cpu)--;
 	/* prevent recursion in schedule */
-	ftrace_preempt_enable(resched);
+	preempt_enable_notrace();
 }
 
 static struct ftrace_ops trace_ops __read_mostly =
 {
 	.func = stack_trace_call,
+	.flags = FTRACE_OPS_FL_GLOBAL,
 };
 
 static ssize_t
@@ -155,20 +156,11 @@ stack_max_size_write(struct file *filp, const char __user *ubuf,
 {
 	long *ptr = filp->private_data;
 	unsigned long val, flags;
-	char buf[64];
 	int ret;
 	int cpu;
 
-	if (count >= sizeof(buf))
-		return -EINVAL;
-
-	if (copy_from_user(&buf, ubuf, count))
-		return -EFAULT;
-
-	buf[count] = 0;
-
-	ret = strict_strtoul(buf, 10, &val);
-	if (ret < 0)
+	ret = kstrtoul_from_user(ubuf, count, 10, &val);
+	if (ret)
 		return ret;
 
 	local_irq_save(flags);
@@ -195,6 +187,7 @@ static const struct file_operations stack_max_size_fops = {
 	.open		= tracing_open_generic,
 	.read		= stack_max_size_read,
 	.write		= stack_max_size_write,
+	.llseek		= default_llseek,
 };
 
 static void *
@@ -249,7 +242,7 @@ static int trace_lookup_stack(struct seq_file *m, long i)
 {
 	unsigned long addr = stack_dump_trace[i];
 
-	return seq_printf(m, "%pF\n", (void *)addr);
+	return seq_printf(m, "%pS\n", (void *)addr);
 }
 
 static void print_disabled(struct seq_file *m)

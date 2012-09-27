@@ -1,7 +1,7 @@
 /*
  *  arch/arm/mach-vexpress/include/mach/timex.h
  *
- *  Versatile Express architecture timex specifications
+ *  RealView architecture timex specifications
  *
  *  Copyright (C) 2003 ARM Limited
  *

@@ -1,6 +1,6 @@
 #include <linux/stat.h>
 #include <linux/sysctl.h>
-#include "../fs/xfs/linux-2.6/xfs_sysctl.h"
+#include "../fs/xfs/xfs_sysctl.h"
 #include <linux/sunrpc/debug.h>
 #include <linux/string.h>
 #include <net/ip_vs.h>
@@ -13,6 +13,8 @@
 #include <linux/file.h>
 #include <linux/ctype.h>
 #include <linux/netdevice.h>
+#include <linux/kernel.h>
+#include <linux/slab.h>
 
 #ifdef CONFIG_SYSCTL_SYSCALL
 
@@ -134,7 +136,6 @@ static const struct bin_table bin_kern_table[] = {
 	{ CTL_INT,	KERN_IA64_UNALIGNED,		"ignore-unaligned-usertrap" },
 	{ CTL_INT,	KERN_COMPAT_LOG,		"compat-log" },
 	{ CTL_INT,	KERN_MAX_LOCK_DEPTH,		"max_lock_depth" },
-	{ CTL_INT,	KERN_NMI_WATCHDOG,		"nmi_watchdog" },
 	{ CTL_INT,	KERN_PANIC_ON_NMI,		"panic_on_unrecovered_nmi" },
 	{}
 };
@@ -223,7 +224,6 @@ static const struct bin_table bin_net_ipv4_route_table[] = {
 	{ CTL_INT,	NET_IPV4_ROUTE_MTU_EXPIRES,		"mtu_expires" },
 	{ CTL_INT,	NET_IPV4_ROUTE_MIN_PMTU,		"min_pmtu" },
 	{ CTL_INT,	NET_IPV4_ROUTE_MIN_ADVMSS,		"min_adv_mss" },
-	{ CTL_INT,	NET_IPV4_ROUTE_SECRET_INTERVAL,		"secret_interval" },
 	{}
 };
 
@@ -1124,11 +1124,6 @@ out:
 	return result;
 }
 
-static unsigned hex_value(int ch)
-{
-	return isdigit(ch) ? ch - '0' : ((ch | 0x20) - 'a') + 10;
-}
-
 static ssize_t bin_uuid(struct file *file,
 	void __user *oldval, size_t oldlen, void __user *newval, size_t newlen)
 {
@@ -1156,7 +1151,8 @@ static ssize_t bin_uuid(struct file *file,
 			if (!isxdigit(str[0]) || !isxdigit(str[1]))
 				goto out;
 
-			uuid[i] = (hex_value(str[0]) << 4) | hex_value(str[1]);
+			uuid[i] = (hex_to_bin(str[0]) << 4) |
+					hex_to_bin(str[1]);
 			str += 2;
 			if (*str == '-')
 				str++;
@@ -1196,7 +1192,7 @@ static ssize_t bin_dn_node_address(struct file *file,
 
 		buf[result] = '\0';
 
-		/* Convert the decnet addresss to binary */
+		/* Convert the decnet address to binary */
 		result = -EIO;
 		nodep = strchr(buf, '.') + 1;
 		if (!nodep)
@@ -1325,13 +1321,11 @@ static ssize_t binary_sysctl(const int *name, int nlen,
 	void __user *oldval, size_t oldlen, void __user *newval, size_t newlen)
 {
 	const struct bin_table *table = NULL;
-	struct nameidata nd;
 	struct vfsmount *mnt;
 	struct file *file;
 	ssize_t result;
 	char *pathname;
 	int flags;
-	int acc_mode, fmode;
 
 	pathname = sysctl_getname(name, nlen, &table);
 	result = PTR_ERR(pathname);
@@ -1341,31 +1335,17 @@ static ssize_t binary_sysctl(const int *name, int nlen,
 	/* How should the sysctl be accessed? */
 	if (oldval && oldlen && newval && newlen) {
 		flags = O_RDWR;
-		acc_mode = MAY_READ | MAY_WRITE;
-		fmode = FMODE_READ | FMODE_WRITE;
 	} else if (newval && newlen) {
 		flags = O_WRONLY;
-		acc_mode = MAY_WRITE;
-		fmode = FMODE_WRITE;
 	} else if (oldval && oldlen) {
 		flags = O_RDONLY;
-		acc_mode = MAY_READ;
-		fmode = FMODE_READ;
 	} else {
 		result = 0;
 		goto out_putname;
 	}
 
 	mnt = current->nsproxy->pid_ns->proc_mnt;
-	result = vfs_path_lookup(mnt->mnt_root, mnt, pathname, 0, &nd);
-	if (result)
-		goto out_putname;
-
-	result = may_open(&nd.path, acc_mode, fmode);
-	if (result)
-		goto out_putpath;
-
-	file = dentry_open(nd.path.dentry, nd.path.mnt, flags, current_cred());
+	file = file_open_root(mnt->mnt_root, mnt, pathname, flags);
 	result = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out_putname;
@@ -1374,13 +1354,9 @@ static ssize_t binary_sysctl(const int *name, int nlen,
 
 	fput(file);
 out_putname:
-	putname(pathname);
+	__putname(pathname);
 out:
 	return result;
-
-out_putpath:
-	path_put(&nd.path);
-	goto out_putname;
 }
 
 

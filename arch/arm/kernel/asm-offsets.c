@@ -13,6 +13,9 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
+#include <asm/cacheflush.h>
+#include <asm/glue-df.h>
+#include <asm/glue-pf.h>
 #include <asm/mach/arch.h>
 #include <asm/thread_info.h>
 #include <asm/memory.h>
@@ -40,6 +43,9 @@
 int main(void)
 {
   DEFINE(TSK_ACTIVE_MM,		offsetof(struct task_struct, active_mm));
+#ifdef CONFIG_CC_STACKPROTECTOR
+  DEFINE(TSK_STACK_CANARY,	offsetof(struct task_struct, stack_canary));
+#endif
   BLANK();
   DEFINE(TI_FLAGS,		offsetof(struct thread_info, flags));
   DEFINE(TI_PREEMPT,		offsetof(struct thread_info, preempt_count));
@@ -53,8 +59,8 @@ int main(void)
   DEFINE(TI_TP_VALUE,		offsetof(struct thread_info, tp_value));
   DEFINE(TI_FPSTATE,		offsetof(struct thread_info, fpstate));
   DEFINE(TI_VFPSTATE,		offsetof(struct thread_info, vfpstate));
-#ifdef CONFIG_VFPM
-  DEFINE(TI_VFPSTATE_CLEAN,	offsetof(struct thread_info, vfpstate.hard.clean));
+#ifdef CONFIG_SMP
+  DEFINE(VFP_CPU,		offsetof(union vfp_state, hard.cpu));
 #endif
 #ifdef CONFIG_ARM_THUMBEE
   DEFINE(TI_THUMBEE_STATE,	offsetof(struct thread_info, thumbee_state));
@@ -84,9 +90,6 @@ int main(void)
   DEFINE(S_PC,			offsetof(struct pt_regs, ARM_pc));
   DEFINE(S_PSR,			offsetof(struct pt_regs, ARM_cpsr));
   DEFINE(S_OLD_R0,		offsetof(struct pt_regs, ARM_ORIG_r0));
-#ifdef CONFIG_CPU_V7M
-  DEFINE(S_EXC_LR,		offsetof(struct pt_regs, ARM_EXC_lr));
-#endif
   DEFINE(S_FRAME_SIZE,		sizeof(struct pt_regs));
   BLANK();
 #ifdef CONFIG_CPU_HAS_ASID
@@ -105,8 +108,6 @@ int main(void)
   DEFINE(SIZEOF_MACHINE_DESC,	sizeof(struct machine_desc));
   DEFINE(MACHINFO_TYPE,		offsetof(struct machine_desc, nr));
   DEFINE(MACHINFO_NAME,		offsetof(struct machine_desc, name));
-  DEFINE(MACHINFO_PHYSIO,	offsetof(struct machine_desc, phys_io));
-  DEFINE(MACHINFO_PGOFFIO,	offsetof(struct machine_desc, io_pg_offst));
   BLANK();
   DEFINE(PROC_INFO_SZ,		sizeof(struct proc_info_list));
   DEFINE(PROCINFO_INITFUNC,	offsetof(struct proc_info_list, __cpu_flush));
@@ -118,6 +119,14 @@ int main(void)
 #endif
 #ifdef MULTI_PABORT
   DEFINE(PROCESSOR_PABT_FUNC,	offsetof(struct processor, _prefetch_abort));
+#endif
+#ifdef MULTI_CPU
+  DEFINE(CPU_SLEEP_SIZE,	offsetof(struct processor, suspend_size));
+  DEFINE(CPU_DO_SUSPEND,	offsetof(struct processor, do_suspend));
+  DEFINE(CPU_DO_RESUME,		offsetof(struct processor, do_resume));
+#endif
+#ifdef MULTI_CACHE
+  DEFINE(CACHE_FLUSH_KERN_ALL,	offsetof(struct cpu_cache_fns, flush_kern_all));
 #endif
   BLANK();
   DEFINE(DMA_BIDIRECTIONAL,	DMA_BIDIRECTIONAL);

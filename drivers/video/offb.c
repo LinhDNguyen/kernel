@@ -17,16 +17,16 @@
 #include <linux/errno.h>
 #include <linux/string.h>
 #include <linux/mm.h>
-#include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/delay.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/interrupt.h>
 #include <linux/fb.h>
 #include <linux/init.h>
 #include <linux/ioport.h>
 #include <linux/pci.h>
 #include <asm/io.h>
-#include <asm/prom.h>
 
 #ifdef CONFIG_PPC64
 #include <asm/pci-bridge.h>
@@ -100,35 +100,31 @@ static int offb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 			  u_int transp, struct fb_info *info)
 {
 	struct offb_par *par = (struct offb_par *) info->par;
-	int i, depth;
-	u32 *pal = info->pseudo_palette;
 
-	depth = info->var.bits_per_pixel;
-	if (depth == 16)
-		depth = (info->var.green.length == 5) ? 15 : 16;
+	if (info->fix.visual == FB_VISUAL_TRUECOLOR) {
+		u32 *pal = info->pseudo_palette;
+		u32 cr = red >> (16 - info->var.red.length);
+		u32 cg = green >> (16 - info->var.green.length);
+		u32 cb = blue >> (16 - info->var.blue.length);
+		u32 value;
 
-	if (regno > 255 ||
-	    (depth == 16 && regno > 63) ||
-	    (depth == 15 && regno > 31))
-		return 1;
+		if (regno >= 16)
+			return -EINVAL;
 
-	if (regno < 16) {
-		switch (depth) {
-		case 15:
-			pal[regno] = (regno << 10) | (regno << 5) | regno;
-			break;
-		case 16:
-			pal[regno] = (regno << 11) | (regno << 5) | regno;
-			break;
-		case 24:
-			pal[regno] = (regno << 16) | (regno << 8) | regno;
-			break;
-		case 32:
-			i = (regno << 8) | regno;
-			pal[regno] = (i << 16) | i;
-			break;
+		value = (cr << info->var.red.offset) |
+			(cg << info->var.green.offset) |
+			(cb << info->var.blue.offset);
+		if (info->var.transp.length > 0) {
+			u32 mask = (1 << info->var.transp.length) - 1;
+			mask <<= info->var.transp.offset;
+			value |= mask;
 		}
+		pal[regno] = value;
+		return 0;
 	}
+
+	if (regno > 255)
+		return -EINVAL;
 
 	red >>= 8;
 	green >>= 8;
@@ -286,7 +282,7 @@ static void offb_destroy(struct fb_info *info)
 {
 	if (info->screen_base)
 		iounmap(info->screen_base);
-	release_mem_region(info->aperture_base, info->aperture_size);
+	release_mem_region(info->apertures->ranges[0].base, info->apertures->ranges[0].size);
 	framebuffer_release(info);
 }
 
@@ -381,7 +377,7 @@ static void __init offb_init_fb(const char *name, const char *full_name,
 				int pitch, unsigned long address,
 				int foreign_endian, struct device_node *dp)
 {
-	unsigned long res_size = pitch * height * (depth + 7) / 8;
+	unsigned long res_size = pitch * height;
 	struct offb_par *par = &default_par;
 	unsigned long res_start = address;
 	struct fb_fix_screeninfo *fix;
@@ -492,8 +488,11 @@ static void __init offb_init_fb(const char *name, const char *full_name,
 	var->vmode = FB_VMODE_NONINTERLACED;
 
 	/* set offb aperture size for generic probing */
-	info->aperture_base = address;
-	info->aperture_size = fix->smem_len;
+	info->apertures = alloc_apertures(1);
+	if (!info->apertures)
+		goto out_aper;
+	info->apertures->ranges[0].base = address;
+	info->apertures->ranges[0].size = fix->smem_len;
 
 	info->fbops = &offb_ops;
 	info->screen_base = ioremap(address, fix->smem_len);
@@ -502,17 +501,20 @@ static void __init offb_init_fb(const char *name, const char *full_name,
 
 	fb_alloc_cmap(&info->cmap, 256, 0);
 
-	if (register_framebuffer(info) < 0) {
-		iounmap(par->cmap_adr);
-		par->cmap_adr = NULL;
-		iounmap(info->screen_base);
-		framebuffer_release(info);
-		release_mem_region(res_start, res_size);
-		return;
-	}
+	if (register_framebuffer(info) < 0)
+		goto out_err;
 
 	printk(KERN_INFO "fb%d: Open Firmware frame buffer device on %s\n",
 	       info->node, full_name);
+	return;
+
+out_err:
+	iounmap(info->screen_base);
+out_aper:
+	iounmap(par->cmap_adr);
+	par->cmap_adr = NULL;
+	framebuffer_release(info);
+	release_mem_region(res_start, res_size);
 }
 
 

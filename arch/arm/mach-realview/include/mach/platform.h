@@ -51,8 +51,8 @@
 #define REALVIEW_SYS_ID_OFFSET               0x00
 #define REALVIEW_SYS_SW_OFFSET               0x04
 #define REALVIEW_SYS_LED_OFFSET              0x08
-
 #define REALVIEW_SYS_OSC0_OFFSET             0x0C
+
 #define REALVIEW_SYS_OSC1_OFFSET             0x10
 #define REALVIEW_SYS_OSC2_OFFSET             0x14
 #define REALVIEW_SYS_OSC3_OFFSET             0x18
@@ -77,7 +77,6 @@
 #define REALVIEW_SYS_BOOTCS_OFFSET           0x58
 #define REALVIEW_SYS_24MHz_OFFSET            0x5C
 #define REALVIEW_SYS_MISC_OFFSET             0x60
-#define REALVIEW_SYS_PCI_STAT_OFFSET	     0x6C
 #define REALVIEW_SYS_IOSEL_OFFSET            0x70
 #define REALVIEW_SYS_PROCID_OFFSET           0x84
 #define REALVIEW_SYS_TEST_OSC0_OFFSET        0xC0
@@ -90,12 +89,8 @@
 #define REALVIEW_SYS_ID                      (REALVIEW_SYS_BASE + REALVIEW_SYS_ID_OFFSET)
 #define REALVIEW_SYS_SW                      (REALVIEW_SYS_BASE + REALVIEW_SYS_SW_OFFSET)
 #define REALVIEW_SYS_LED                     (REALVIEW_SYS_BASE + REALVIEW_SYS_LED_OFFSET)
-
 #define REALVIEW_SYS_OSC0                    (REALVIEW_SYS_BASE + REALVIEW_SYS_OSC0_OFFSET)
 #define REALVIEW_SYS_OSC1                    (REALVIEW_SYS_BASE + REALVIEW_SYS_OSC1_OFFSET)
-#define REALVIEW_SYS_OSC2                    (REALVIEW_SYS_BASE + REALVIEW_SYS_OSC2_OFFSET)
-#define REALVIEW_SYS_OSC3                    (REALVIEW_SYS_BASE + REALVIEW_SYS_OSC3_OFFSET)
-#define REALVIEW_SYS_OSC4                    (REALVIEW_SYS_BASE + REALVIEW_SYS_OSC4_OFFSET)
 
 #define REALVIEW_SYS_LOCK                    (REALVIEW_SYS_BASE + REALVIEW_SYS_LOCK_OFFSET)
 #define REALVIEW_SYS_100HZ                   (REALVIEW_SYS_BASE + REALVIEW_SYS_100HZ_OFFSET)
@@ -110,7 +105,6 @@
 #define REALVIEW_SYS_RESETCTL                (REALVIEW_SYS_BASE + REALVIEW_SYS_RESETCTL_OFFSET)
 #define REALVIEW_SYS_PCICTL                  (REALVIEW_SYS_BASE + REALVIEW_SYS_PCICTL_OFFSET)
 #define REALVIEW_SYS_MCI                     (REALVIEW_SYS_BASE + REALVIEW_SYS_MCI_OFFSET)
-#define REALVIEW_SYS_PCI_STAT		     (REALVIEW_SYS_BASE + REALVIEW_SYS_PCI_STAT_OFFSET)
 #define REALVIEW_SYS_FLASH                   (REALVIEW_SYS_BASE + REALVIEW_SYS_FLASH_OFFSET)
 #define REALVIEW_SYS_CLCD                    (REALVIEW_SYS_BASE + REALVIEW_SYS_CLCD_OFFSET)
 #define REALVIEW_SYS_CLCDSER                 (REALVIEW_SYS_BASE + REALVIEW_SYS_CLCDSER_OFFSET)
@@ -180,6 +174,19 @@
 #define REALVIEW_DMC_BASE             0x10018000	/* DMC configuration */
 #define REALVIEW_DMAC_BASE            0x10030000	/* DMA controller */
 
+/* PCI space */
+#define REALVIEW_PCI_BASE             0x41000000	/* PCI Interface */
+#define REALVIEW_PCI_CFG_BASE	      0x42000000
+#define REALVIEW_PCI_MEM_BASE0        0x44000000
+#define REALVIEW_PCI_MEM_BASE1        0x50000000
+#define REALVIEW_PCI_MEM_BASE2        0x60000000
+/* Sizes of above maps */
+#define REALVIEW_PCI_BASE_SIZE	       0x01000000
+#define REALVIEW_PCI_CFG_BASE_SIZE    0x02000000
+#define REALVIEW_PCI_MEM_BASE0_SIZE   0x0c000000	/* 32Mb */
+#define REALVIEW_PCI_MEM_BASE1_SIZE   0x10000000	/* 256Mb */
+#define REALVIEW_PCI_MEM_BASE2_SIZE   0x10000000	/* 256Mb */
+
 #define REALVIEW_SDRAM67_BASE         0x70000000	/* SDRAM banks 6 and 7 */
 #define REALVIEW_LT_BASE              0x80000000	/* Logic Tile expansion */
 
@@ -224,12 +231,6 @@
 #define REALVIEW_INTREG_OFFSET		0x8	/* Interrupt control */
 #define REALVIEW_DECODE_OFFSET		0xC	/* Fitted logic modules */
 
-/* 
- *  Clean base - dummy
- * 
- */
-#define CLEAN_BASE                      REALVIEW_BOOT_ROM_HI
-
 /*
  * System controller bit assignment
  */
@@ -241,20 +242,6 @@
 #define REALVIEW_TIMER3_EnSel	19
 #define REALVIEW_TIMER4_EnSel	21
 
-
-#define MAX_TIMER                       2
-#define MAX_PERIOD                      699050
-#define TICKS_PER_uSEC                  1
-
-/* 
- *  These are useconds NOT ticks.  
- * 
- */
-#define mSEC_1                          1000
-#define mSEC_5                          (mSEC_1 * 5)
-#define mSEC_10                         (mSEC_1 * 10)
-#define mSEC_25                         (mSEC_1 * 25)
-#define SEC_1                           (mSEC_1 * 1000)
 
 #define REALVIEW_CSR_BASE             0x10000000
 #define REALVIEW_CSR_SIZE             0x10000000

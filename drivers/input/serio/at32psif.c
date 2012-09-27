@@ -18,6 +18,7 @@
 #include <linux/io.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 
 /* PSIF register offsets */
 #define PSIF_CR				0x00
@@ -371,6 +372,6 @@ static void __exit psif_exit(void)
 module_init(psif_init);
 module_exit(psif_exit);
 
-MODULE_AUTHOR("Hans-Christian Egtvedt <hans-christian.egtvedt@atmel.com>");
+MODULE_AUTHOR("Hans-Christian Egtvedt <egtvedt@samfundet.no>");
 MODULE_DESCRIPTION("Atmel AVR32 PSIF PS/2 driver");
 MODULE_LICENSE("GPL");
