@@ -294,10 +294,8 @@ int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		    v4addr != htonl(INADDR_ANY) &&
 		    chk_addr_ret != RTN_LOCAL &&
 		    chk_addr_ret != RTN_MULTICAST &&
-		    chk_addr_ret != RTN_BROADCAST) {
-			err = -EADDRNOTAVAIL;
+		    chk_addr_ret != RTN_BROADCAST)
 			goto out;
-		}
 	} else {
 		if (addr_type != IPV6_ADDR_ANY) {
 			struct net_device *dev = NULL;

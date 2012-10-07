@@ -786,6 +786,11 @@ config VIDEO_OMAP2
 	---help---
 	  This is a v4l2 driver for the TI OMAP2 camera capture interface
 
+config  VIDEO_OV9650
+	tristate "OV9650 Drivers for EmbedSky SKY2440/TQ2440 Board"
+	depends on VIDEO_DEV && ARCH_S3C2440
+	default y if (VIDEO_DEV && ARCH_S3C2440)
+
 #
 # USB Multimedia device configuration
 #

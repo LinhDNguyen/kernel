@@ -27,6 +27,36 @@ config LOGO_LINUX_CLUT224
 	bool "Standard 224-color Linux logo"
 	default y
 
+config LOGO_LINUX_TFT240320_CLUT224
+	bool "Standard 224-color Linux logo for 240X320"
+	depends on LOGO && FB_S3C24X0_T240320
+	default y
+
+config LOGO_LINUX_TFT320240_CLUT224
+	bool "Standard 224-color Linux logo for 320X240"
+	depends on LOGO && FB_S3C24X0_S320240 || FB_S3C24X0_W320240 
+	default y
+
+config LOGO_LINUX_TFT480272_CLUT224
+	bool "Standard 224-color Linux logo for 480X272"
+	depends on LOGO && FB_S3C24X0_TFT480272 
+	default y
+
+config LOGO_LINUX_TFT640480_CLUT224
+	bool "Standard 224-color Linux logo for 640X480"
+	depends on LOGO && FB_S3C24X0_TFT640480 
+	default y
+
+config LOGO_LINUX_TFT800480_CLUT224
+	bool "Standard 224-color Linux logo for 800X480"
+	depends on LOGO && FB_S3C24X0_TFT800480 
+	default y
+
+config LOGO_LINUX_TFT800600_CLUT224
+	bool "Standard 224-color Linux logo for 800X600"
+	depends on LOGO && FB_S3C24X0_TFT800600 
+	default y
+
 config LOGO_BLACKFIN_VGA16
 	bool "16-colour Blackfin Processor Linux logo"
 	depends on BLACKFIN

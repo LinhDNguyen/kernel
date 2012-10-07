@@ -800,7 +800,7 @@ int __devinit snd_ca0106_mixer(struct snd_ca0106 *emu)
 		"Capture Volume",
 		"External Amplifier",
 		"Sigmatel 4-Speaker Stereo Playback Switch",
-		"Surround Phase Inversion Playback Switch",
+		"Sigmatel Surround Phase Inversion Playback ",
 		NULL
 	};
 	static char *ca0106_rename_ctls[] = {

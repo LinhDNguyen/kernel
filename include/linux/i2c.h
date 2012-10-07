@@ -134,8 +134,11 @@ extern s32 i2c_smbus_write_i2c_block_data(struct i2c_client *client,
  * not allowed.
  */
 struct i2c_driver {
+	struct module *owner;		//HJ_add
+	char name[32];			//HJ_add
 	int id;
 	unsigned int class;
+	unsigned int flags;			//HJ_add
 
 	/* Notifies the driver that a new bus has appeared. This routine
 	 * can be used by the driver to test if the bus meets its conditions
@@ -382,7 +385,12 @@ static inline void i2c_set_adapdata(struct i2c_adapter *dev, void *data)
 	dev_set_drvdata(&dev->dev, data);
 }
 
+/*flags for the driver struct: */
+#define I2C_DF_NOTIFY	0x01		/* notify on bus (de/a)ttaches 	*/
+
 /*flags for the client struct: */
+#define I2C_CLIENT_ALLOW_USE		0x01	/* Client allows access */
+
 #define I2C_CLIENT_PEC	0x04		/* Use Packet Error Checking */
 #define I2C_CLIENT_TEN	0x10		/* we have a ten bit chip address */
 					/* Must equal I2C_M_TEN below */

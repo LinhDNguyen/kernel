@@ -97,6 +97,47 @@ config DEVKMEM
 	  kind of kernel debugging operations.
 	  When in doubt, say "N".
 
+config TQ2440_HELLO
+	tristate "SKY2440/TQ2440 Board Hello module test"
+	depends on ARCH_S3C2440
+	default m if ARCH_S3C2440
+	help
+	  SKY2440/TQ2440 Board First module test.
+
+config TQ2440_GPIO_TEST
+	tristate "EmbedSky SKY2440/TQ2440 Board GPIO Test(control LED)"
+	depends on ARCH_S3C2440
+	default y if ARCH_S3C2440
+	help
+	  GPIO control for EmbedSky SKY2440/TQ2440 Board.
+
+config TQ2440_PWM
+	tristate "EmbedSky SKY2440/TQ2440 Board PWM Drivers(Beep control)"
+	depends on ARCH_S3C2440
+	default y if ARCH_S3C2440
+	help
+	  PWM Drivers for EmbedSky SKY2440/TQ2440 Board.
+
+config TQ2440_IRQ_TEST
+	tristate "EmbedSky TQ2440 Board IRQ Test(Buttons test)"
+	depends on ARCH_S3C2440
+	default m if ARCH_S3C2440
+	help
+	  IRQ Test for EmbedSky TQ2440 Board.
+
+config SKY2440_IRQ_TEST
+	bool "EmbedSky SKY2440 Board IRQ Test(Buttons test)"
+	depends on TQ2440_IRQ_TEST
+	help
+	  IRQ Test for EmbedSky SKY2440 Board.
+
+config TQ2440_ADC
+	bool "EmbedSky SKY2440/TQ2440 Board ADC Driver"
+	depends on ARCH_S3C2440
+	default y if ARCH_S3C2440
+	help
+	  ADC Driver for EmbedSky SKY2440/TQ2440 Board.
+
 config SERIAL_NONSTANDARD
 	bool "Non-standard serial port support"
 	depends on HAS_IOMEM

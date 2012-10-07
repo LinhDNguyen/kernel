@@ -367,6 +367,9 @@ static void s3c2410fb_activate_var(struct fb_info *info)
 	struct s3c2410fb_info *fbi = info->par;
 	void __iomem *regs = fbi->io;
 	int type = fbi->regs.lcdcon1 & S3C2410_LCDCON1_TFT;
+	struct s3c2410fb_mach_info *mach_info = fbi->dev->platform_data;
+	struct s3c2410fb_display *default_display = mach_info->displays +
+						    mach_info->default_display;
 	struct fb_var_screeninfo *var = &info->var;
 	int clkdiv = s3c2410fb_calc_pixclk(fbi, var->pixclock) / 2;
 
@@ -385,7 +388,8 @@ static void s3c2410fb_activate_var(struct fb_info *info)
 			clkdiv = 2;
 	}
 
-	fbi->regs.lcdcon1 |=  S3C2410_LCDCON1_CLKVAL(clkdiv);
+//	fbi->regs.lcdcon1 |=  S3C2410_LCDCON1_CLKVAL(clkdiv);
+	fbi->regs.lcdcon1 |=  S3C2410_LCDCON1_CLKVAL(default_display->setclkval);
 
 	/* write new registers */
 

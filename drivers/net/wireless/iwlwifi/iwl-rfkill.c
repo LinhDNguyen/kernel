@@ -53,31 +53,22 @@ static int iwl_rfkill_soft_rf_kill(void *data, enum rfkill_state state)
 	switch (state) {
 	case RFKILL_STATE_UNBLOCKED:
 		if (iwl_is_rfkill_hw(priv)) {
-			/* pass error to rfkill core, make it state HARD
-			 * BLOCKED (rfkill->mutex taken) and disable
-			 * software kill switch */
 			err = -EBUSY;
-			priv->rfkill->state = RFKILL_STATE_HARD_BLOCKED;
+			goto out_unlock;
 		}
 		iwl_radio_kill_sw_enable_radio(priv);
 		break;
 	case RFKILL_STATE_SOFT_BLOCKED:
 		iwl_radio_kill_sw_disable_radio(priv);
-		/* rfkill->mutex is taken */
-		if (priv->rfkill->state == RFKILL_STATE_HARD_BLOCKED) {
-			/* force rfkill core state to be SOFT BLOCKED,
-			 * otherwise core will be unable to disable software
-			 * kill switch */
-			priv->rfkill->state = RFKILL_STATE_SOFT_BLOCKED;
-		}
 		break;
 	default:
 		IWL_WARN(priv, "we received unexpected RFKILL state %d\n",
 			state);
 		break;
 	}
-
+out_unlock:
 	mutex_unlock(&priv->mutex);
+
 	return err;
 }
 
@@ -141,11 +132,14 @@ void iwl_rfkill_set_hw_state(struct iwl_priv *priv)
 	if (!priv->rfkill)
 		return;
 
-	if (iwl_is_rfkill_sw(priv))
-		rfkill_force_state(priv->rfkill, RFKILL_STATE_SOFT_BLOCKED);
-	else if (iwl_is_rfkill_hw(priv))
+	if (iwl_is_rfkill_hw(priv)) {
 		rfkill_force_state(priv->rfkill, RFKILL_STATE_HARD_BLOCKED);
-	else
+		return;
+	}
+
+	if (!iwl_is_rfkill_sw(priv))
 		rfkill_force_state(priv->rfkill, RFKILL_STATE_UNBLOCKED);
+	else
+		rfkill_force_state(priv->rfkill, RFKILL_STATE_SOFT_BLOCKED);
 }
 EXPORT_SYMBOL(iwl_rfkill_set_hw_state);

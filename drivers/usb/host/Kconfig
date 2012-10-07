@@ -4,6 +4,11 @@
 comment "USB Host Controller Drivers"
 	depends on USB
 
+config EmbedSky_TWO_USB_HOST
+	bool "EmbedSky TWO USB HOST"
+	---help---
+		S3C2440 can use two usb Host or one usb host and one usb device.
+
 config USB_C67X00_HCD
 	tristate "Cypress C67x00 HCD support"
 	depends on USB

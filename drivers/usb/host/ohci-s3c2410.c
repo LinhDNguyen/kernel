@@ -22,6 +22,9 @@
 #include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <plat/usb-control.h>
+#ifdef CONFIG_EmbedSky_TWO_USB_HOST
+#include <mach/regs-gpio.h>
+#endif
 
 #define valid_port(idx) ((idx) == 1 || (idx) == 2)
 
@@ -344,6 +347,15 @@ static int usb_hcd_s3c2410_probe (const struct hc_driver *driver,
 {
 	struct usb_hcd *hcd = NULL;
 	int retval;
+
+#ifdef CONFIG_EmbedSky_TWO_USB_HOST
+	printk("Initial EmbedSky TWO USB HOST Driver!\n");
+	unsigned long reg_misccr;
+	reg_misccr = 0;
+	reg_misccr = readl(S3C2410_MISCCR);
+	reg_misccr = reg_misccr | S3C2410_MISCCR_USBHOST;
+	writel(reg_misccr,S3C2410_MISCCR);
+#endif
 
 	s3c2410_usb_set_power(dev->dev.platform_data, 1, 1);
 	s3c2410_usb_set_power(dev->dev.platform_data, 2, 1);

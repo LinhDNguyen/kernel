@@ -107,54 +107,63 @@ static struct platform_device smdk_led7 = {
 /* NAND parititon from 2.4.18-swl5 */
 
 static struct mtd_partition smdk_default_nand_part[] = {
+#if	defined(CONFIG_EmbedSky_64MB_NAND)
 	[0] = {
-		.name	= "Boot Agent",
-		.size	= SZ_16K,
-		.offset	= 0,
+		.name	= "EmbedSky_Board_uboot",
+		.offset	= 0x00000000,
+		.size	= 0x00040000,
 	},
 	[1] = {
-		.name	= "S3C2410 flash partition 1",
-		.offset = 0,
-		.size	= SZ_2M,
+		.name	= "EmbedSky_Board_kernel",
+		.offset	= 0x001F0000,
+		.size	= 0x00200000,
 	},
 	[2] = {
-		.name	= "S3C2410 flash partition 2",
-		.offset = SZ_4M,
-		.size	= SZ_4M,
-	},
-	[3] = {
-		.name	= "S3C2410 flash partition 3",
-		.offset	= SZ_8M,
-		.size	= SZ_2M,
-	},
-	[4] = {
-		.name	= "S3C2410 flash partition 4",
-		.offset = SZ_1M * 10,
-		.size	= SZ_4M,
-	},
-	[5] = {
-		.name	= "S3C2410 flash partition 5",
-		.offset	= SZ_1M * 14,
-		.size	= SZ_1M * 10,
-	},
-	[6] = {
-		.name	= "S3C2410 flash partition 6",
-		.offset	= SZ_1M * 24,
-		.size	= SZ_1M * 24,
-	},
-	[7] = {
-		.name	= "S3C2410 flash partition 7",
-		.offset = SZ_1M * 48,
-		.size	= SZ_16M,
+		.name	= "EmbedSky_Board_yaffs2",
+		.offset	= 0x003F0000,
+		.size	= 0x03C08000,
 	}
+#elif	defined(CONFIG_EmbedSky_128MB_NAND)
+	[0] = {
+		.name	= "EmbedSky_Board_uboot",
+		.offset	= 0x00000000,
+		.size	= 0x00040000,
+	},
+	[1] = {
+		.name	= "EmbedSky_Board_kernel",
+		.offset	= 0x00200000,
+		.size	= 0x00200000,
+	},
+	[2] = {
+		.name	= "EmbedSky_Board_yaffs2",
+		.offset	= 0x00400000,
+		.size	= 0x07BA0000,
+	}
+#elif	defined(CONFIG_EmbedSky_more_than_256MB_NAND)
+	[0] = {
+		.name	= "EmbedSky_Board_uboot",
+		.offset	= 0x00000000,
+		.size	= 0x00040000,
+	},
+	[1] = {
+		.name	= "EmbedSky_Board_kernel",
+		.offset	= 0x00200000,
+		.size	= 0x00200000,
+	},
+	[2] = {
+		.name	= "EmbedSky_Board_yaffs2",
+		.offset	= 0x00400000,
+		.size	= 0x0FB80000,
+	}
+#endif
 };
 
 static struct s3c2410_nand_set smdk_nand_sets[] = {
 	[0] = {
 		.name		= "NAND",
-		.nr_chips	= 1,
+		.nr_chips		= 1,
 		.nr_partitions	= ARRAY_SIZE(smdk_default_nand_part),
-		.partitions	= smdk_default_nand_part,
+		.partitions		= smdk_default_nand_part,
 	},
 };
 
@@ -166,7 +175,7 @@ static struct s3c2410_platform_nand smdk_nand_info = {
 	.tacls		= 20,
 	.twrph0		= 60,
 	.twrph1		= 20,
-	.nr_sets	= ARRAY_SIZE(smdk_nand_sets),
+	.nr_sets		= ARRAY_SIZE(smdk_nand_sets),
 	.sets		= smdk_nand_sets,
 };
 
@@ -174,6 +183,7 @@ static struct s3c2410_platform_nand smdk_nand_info = {
 
 static struct platform_device __initdata *smdk_devs[] = {
 	&s3c_device_nand,
+	&s3c_device_sdi,
 	&smdk_led4,
 	&smdk_led5,
 	&smdk_led6,

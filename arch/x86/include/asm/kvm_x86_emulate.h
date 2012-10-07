@@ -143,9 +143,6 @@ struct decode_cache {
 	struct fetch_cache fetch;
 };
 
-#define X86_SHADOW_INT_MOV_SS  1
-#define X86_SHADOW_INT_STI     2
-
 struct x86_emulate_ctxt {
 	/* Register state before/after emulation. */
 	struct kvm_vcpu *vcpu;
@@ -154,9 +151,6 @@ struct x86_emulate_ctxt {
 	/* Emulated execution mode, represented by an X86EMUL_MODE value. */
 	int mode;
 	u32 cs_base;
-
-	/* interruptibility state, as a result of execution of STI or MOV SS */
-	int interruptibility;
 
 	/* decode cache */
 	struct decode_cache decode;

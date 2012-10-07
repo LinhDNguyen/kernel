@@ -111,4 +111,9 @@ config MACH_SMDK
 	help
 	  Common machine code for SMDK2410 and SMDK2440
 
+config MACH_EMBEDSKY
+	bool
+	help
+	  Common machine code for EmbedSky SKY2440 and TQ2440 Board
+
 endif

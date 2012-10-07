@@ -1144,8 +1144,8 @@ static void s3cmci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 	if ((ios->power_mode == MMC_POWER_ON) ||
 	    (ios->power_mode == MMC_POWER_UP)) {
-		dbg(host, dbg_conf, "running at %lukHz (requested: %ukHz).\n",
-			host->real_rate/1000, ios->clock/1000);
+//		dbg(host, dbg_conf, "running at %lukHz (requested: %ukHz).\n",
+//			host->real_rate/1000, ios->clock/1000);
 	} else {
 		dbg(host, dbg_conf, "powered down.\n");
 	}
@@ -1332,6 +1332,8 @@ static int __devinit s3cmci_probe(struct platform_device *pdev, int is2440)
 	disable_irq(host->irq);
 
 	host->irq_cd = s3c2410_gpio_getirq(host->pdata->gpio_detect);
+	host->irq_cd = IRQ_EINT16;
+	s3c2410_gpio_cfgpin(S3C2410_GPG8, S3C2410_GPG8_EINT16);
 
 	if (host->irq_cd >= 0) {
 		if (request_irq(host->irq_cd, s3cmci_irq_cd,

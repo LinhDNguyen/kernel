@@ -828,22 +828,15 @@ static int load_flat_shared_library(int id, struct lib_info *libs)
 	if (IS_ERR(bprm.file))
 		return res;
 
-	bprm.cred = prepare_exec_creds();
-	res = -ENOMEM;
-	if (!bprm.cred)
-		goto out;
-
 	res = prepare_binprm(&bprm);
 
 	if (res <= (unsigned long)-4096)
 		res = load_flat_file(&bprm, libs, id, NULL);
-
-	abort_creds(bprm.cred);
-
-out:
-	allow_write_access(bprm.file);
-	fput(bprm.file);
-
+	if (bprm.file) {
+		allow_write_access(bprm.file);
+		fput(bprm.file);
+		bprm.file = NULL;
+	}
 	return(res);
 }
 

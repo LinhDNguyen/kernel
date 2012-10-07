@@ -24,6 +24,12 @@
 extern const struct linux_logo logo_linux_mono;
 extern const struct linux_logo logo_linux_vga16;
 extern const struct linux_logo logo_linux_clut224;
+extern const struct linux_logo logo_linux_tft240320_clut224;
+extern const struct linux_logo logo_linux_tft320240_clut224;
+extern const struct linux_logo logo_linux_tft480272_clut224;
+extern const struct linux_logo logo_linux_tft640480_clut224;
+extern const struct linux_logo logo_linux_tft800480_clut224;
+extern const struct linux_logo logo_linux_tft800600_clut224;
 extern const struct linux_logo logo_blackfin_vga16;
 extern const struct linux_logo logo_blackfin_clut224;
 extern const struct linux_logo logo_dec_clut224;
@@ -81,6 +87,30 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 #ifdef CONFIG_LOGO_LINUX_CLUT224
 		/* Generic Linux logo */
 		logo = &logo_linux_clut224;
+#endif
+#ifdef CONFIG_LOGO_LINUX_TFT240320_CLUT224
+		/* Generic Linux logo */
+		logo = &logo_linux_tft240320_clut224;
+#endif
+#ifdef CONFIG_LOGO_LINUX_TFT320240_CLUT224
+		/* Generic Linux logo */
+		logo = &logo_linux_tft320240_clut224;
+#endif
+#ifdef CONFIG_LOGO_LINUX_TFT480272_CLUT224
+		/* Generic Linux logo */
+		logo = &logo_linux_tft480272_clut224;
+#endif
+#ifdef CONFIG_LOGO_LINUX_TFT640480_CLUT224
+		/* Generic Linux logo */
+		logo = &logo_linux_tft640480_clut224;
+#endif
+#ifdef CONFIG_LOGO_LINUX_TFT800480_CLUT224
+		/* Generic Linux logo */
+		logo = &logo_linux_tft800480_clut224;
+#endif
+#ifdef CONFIG_LOGO_LINUX_TFT800600_CLUT224
+		/* Generic Linux logo */
+		logo = &logo_linux_tft800600_clut224;
 #endif
 #ifdef CONFIG_LOGO_BLACKFIN_CLUT224
 		/* Blackfin Linux logo */

@@ -32,6 +32,7 @@ struct device_private;
 struct device_driver;
 struct driver_private;
 struct class;
+struct class_device;			//HJ_add
 struct class_private;
 struct bus_type;
 struct bus_type_private;
@@ -205,6 +206,19 @@ struct class {
 	struct class_private *p;
 };
 
+struct class_device {				//HJ_add start
+	struct list_head	node;
+
+	struct kobject		kobj;
+	struct class		* class;	/* required */
+	dev_t			devt;		/* dev_t, creates the sysfs "dev" */
+	struct class_device_attribute *devt_attr;
+	struct device		* dev;		/* not necessary, but nice to have */
+	void			* class_data;	/* class-specific data */
+
+	char	class_id[BUS_ID_SIZE];	/* unique to this class */
+};						//HJ_add end
+
 struct class_dev_iter {
 	struct klist_iter		ki;
 	const struct device_type	*type;
@@ -267,6 +281,10 @@ extern struct class * __must_check __class_create(struct module *owner,
 						  const char *name,
 						  struct lock_class_key *key);
 extern void class_destroy(struct class *cls);
+extern int class_device_create_file(struct class_device *, 				//HJ_add start
+				    const struct class_device_attribute *);
+extern void class_device_remove_file(struct class_device *, 
+				     const struct class_device_attribute *);	//HJ_add end
 
 /* This is a #define to keep the compiler from merging different
  * instances of the __key variable */

@@ -2414,9 +2414,11 @@ do_sigaltstack (const stack_t __user *uss, stack_t __user *uoss, unsigned long s
 	stack_t oss;
 	int error;
 
-	oss.ss_sp = (void __user *) current->sas_ss_sp;
-	oss.ss_size = current->sas_ss_size;
-	oss.ss_flags = sas_ss_flags(sp);
+	if (uoss) {
+		oss.ss_sp = (void __user *) current->sas_ss_sp;
+		oss.ss_size = current->sas_ss_size;
+		oss.ss_flags = sas_ss_flags(sp);
+	}
 
 	if (uss) {
 		void __user *ss_sp;
@@ -2459,16 +2461,13 @@ do_sigaltstack (const stack_t __user *uss, stack_t __user *uoss, unsigned long s
 		current->sas_ss_size = ss_size;
 	}
 
-	error = 0;
 	if (uoss) {
 		error = -EFAULT;
-		if (!access_ok(VERIFY_WRITE, uoss, sizeof(*uoss)))
+		if (copy_to_user(uoss, &oss, sizeof(oss)))
 			goto out;
-		error = __put_user(oss.ss_sp, &uoss->ss_sp) |
-			__put_user(oss.ss_size, &uoss->ss_size) |
-			__put_user(oss.ss_flags, &uoss->ss_flags);
 	}
 
+	error = 0;
 out:
 	return error;
 }

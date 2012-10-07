@@ -45,9 +45,9 @@ int ima_calc_hash(struct file *file, char *digest)
 {
 	struct hash_desc desc;
 	struct scatterlist sg[1];
-	loff_t i_size, offset = 0;
+	loff_t i_size;
 	char *rbuf;
-	int rc;
+	int rc, offset = 0;
 
 	rc = init_desc(&desc);
 	if (rc != 0)
@@ -67,8 +67,6 @@ int ima_calc_hash(struct file *file, char *digest)
 			rc = rbuf_len;
 			break;
 		}
-		if (rbuf_len == 0)
-			break;
 		offset += rbuf_len;
 		sg_init_one(sg, rbuf, rbuf_len);
 

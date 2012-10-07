@@ -38,6 +38,10 @@
 #include <asm/irq.h>
 #include <asm/io.h>
 
+#if defined(CONFIG_ARCH_S3C2410)
+#include <mach/regs-mem.h>
+#endif
+
 #include "dm9000.h"
 
 /* Board/System/Debug information/definition ---------------- */
@@ -1187,6 +1191,11 @@ dm9000_probe(struct platform_device *pdev)
 	int i;
 	u32 id_val;
 
+#if defined(CONFIG_ARCH_S3C2410)
+	unsigned int oldval_bwscon = *(volatile unsigned int *)S3C2410_BWSCON;
+	unsigned int oldval_bankcon4 = *(volatile unsigned int *)S3C2410_BANKCON4;
+#endif
+
 	/* Init network device */
 	ndev = alloc_etherdev(sizeof(struct board_info));
 	if (!ndev) {
@@ -1197,6 +1206,11 @@ dm9000_probe(struct platform_device *pdev)
 	SET_NETDEV_DEV(ndev, &pdev->dev);
 
 	dev_dbg(&pdev->dev, "dm9000_probe()\n");
+
+#if defined(CONFIG_ARCH_S3C2410)
+	*((volatile unsigned int *)S3C2410_BWSCON) = (oldval_bwscon & ~(3<<16)) | S3C2410_BWSCON_DW4_16 | S3C2410_BWSCON_WS4 | S3C2410_BWSCON_ST4;
+	*((volatile unsigned int *)S3C2410_BANKCON4) = 0x1f7c;
+#endif
 
 	/* setup board info structure */
 	db = netdev_priv(ndev);
@@ -1361,6 +1375,16 @@ dm9000_probe(struct platform_device *pdev)
 	db->mii.mdio_read    = dm9000_phy_read;
 	db->mii.mdio_write   = dm9000_phy_write;
 
+#if defined(CONFIG_ARCH_S3C2410)
+	printk("Now use the default MAC address: 10:23:45:67:89:ab\n");
+	mac_src = "EmbedSky";
+	ndev->dev_addr[0] = 0x10;
+	ndev->dev_addr[1] = 0x23;
+	ndev->dev_addr[2] = 0x45;
+	ndev->dev_addr[3] = 0x67;
+	ndev->dev_addr[4] = 0x89;
+	ndev->dev_addr[5] = 0xab;
+#else
 	mac_src = "eeprom";
 
 	/* try reading the node address from the attached EEPROM */
@@ -1383,6 +1407,7 @@ dm9000_probe(struct platform_device *pdev)
 	if (!is_valid_ether_addr(ndev->dev_addr))
 		dev_warn(db->dev, "%s: Invalid ethernet MAC address. Please "
 			 "set using ifconfig\n", ndev->name);
+#endif
 
 	platform_set_drvdata(pdev, ndev);
 	ret = register_netdev(ndev);
@@ -1395,6 +1420,10 @@ dm9000_probe(struct platform_device *pdev)
 	return 0;
 
 out:
+#if defined(CONFIG_ARCH_S3C2410)
+	*(volatile unsigned int *)S3C2410_BWSCON   = oldval_bwscon;
+	*(volatile unsigned int *)S3C2410_BANKCON4 = oldval_bankcon4;
+#endif
 	dev_err(db->dev, "not found (%d).\n", ret);
 
 	dm9000_release_board(pdev, db);

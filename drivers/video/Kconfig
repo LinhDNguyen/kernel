@@ -1907,7 +1907,7 @@ config FB_S3C_DEBUG_REGWRITE
        ---help---
          Show all register writes via printk(KERN_DEBUG)
 
-config FB_S3C2410
+config FB_S3C24X0
 	tristate "S3C2410 LCD framebuffer support"
 	depends on FB && ARCH_S3C2410
 	select FB_CFB_FILLRECT
@@ -1923,12 +1923,69 @@ config FB_S3C2410
 	  say M here and read <file:Documentation/kbuild/modules.txt>.
 
 	  If unsure, say N.
+
+choice
+	prompt "LCD select"
+	depends on FB_S3C24X0
+	help
+	   S3C24x0 LCD size select
+
+config FB_S3C24X0_S320240
+	boolean "3.5 inch 320x240 Samsung LCD"
+	depends on FB_S3C24X0
+	help
+	   3.5 inch 320x240 Samsung LCD
+
+config FB_S3C24X0_W320240
+	boolean "3.5 inch 320x240 WanXin LCD"
+	depends on FB_S3C24X0
+	help
+	   3.5 inch 320x240 WanXin LCD
+
+config FB_S3C24X0_T240320
+	boolean "3.5 inch 240X320 Toshiba LCD"
+	depends on FB_S3C24X0
+	help
+	   3.5 inch 240x320 Toshiba LCD
+
+config FB_S3C24X0_TFT480272
+	boolean "4.3 inch 480X272 TFT LCD"
+	depends on FB_S3C24X0
+	help
+	   4.3 inch 480X272 TFT LCD
+
+config FB_S3C24X0_TFT640480
+	boolean "VGA 640x480"
+	depends on FB_S3C24X0
+	help
+	   VGA 640x480
+
+config FB_S3C24X0_TFT800480
+	boolean "7 inch 800x480 LCD"
+	depends on FB_S3C24X0
+	help
+	   7 inch 800x480 LCD
+
+config FB_S3C24X0_TFT800600
+	boolean "10.4 inch 800x600 TFT LCD"
+	depends on FB_S3C24X0
+	help
+	   10.4 inch 800x480 TFT LCD
+
+endchoice	
+
 config FB_S3C2410_DEBUG
 	bool "S3C2410 lcd debug messages"
-	depends on FB_S3C2410
+	depends on FB_S3C24X0
 	help
 	  Turn on debugging messages. Note that you can set/unset at run time
 	  through sysfs
+
+config TQ2440_BACKLIGHT
+	bool "EmbedSky SKY2440/TQ2440 Board Backlight control"
+	depends on FB_S3C24X0
+	help
+	  Backlight control for EmbedSky SKY2440/TQ2440 Board.
 
 config FB_SM501
 	tristate "Silicon Motion SM501 framebuffer support"

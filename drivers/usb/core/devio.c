@@ -582,7 +582,7 @@ static int usbdev_open(struct inode *inode, struct file *file)
 	if (!ps)
 		goto out;
 
-	ret = -ENODEV;
+	ret = -ENOENT;
 
 	/* usbdev device-node */
 	if (imajor(inode) == USB_DEVICE_MAJOR)
@@ -1308,8 +1308,7 @@ static int get_urb32(struct usbdevfs_urb *kurb,
 		     struct usbdevfs_urb32 __user *uurb)
 {
 	__u32  uptr;
-	if (!access_ok(VERIFY_READ, uurb, sizeof(*uurb)) ||
-	    __get_user(kurb->type, &uurb->type) ||
+	if (get_user(kurb->type, &uurb->type) ||
 	    __get_user(kurb->endpoint, &uurb->endpoint) ||
 	    __get_user(kurb->status, &uurb->status) ||
 	    __get_user(kurb->flags, &uurb->flags) ||
@@ -1524,9 +1523,8 @@ static int proc_ioctl_compat(struct dev_state *ps, compat_uptr_t arg)
 	u32 udata;
 
 	uioc = compat_ptr((long)arg);
-	if (!access_ok(VERIFY_READ, uioc, sizeof(*uioc)) ||
-	    __get_user(ctrl.ifno, &uioc->ifno) ||
-	    __get_user(ctrl.ioctl_code, &uioc->ioctl_code) ||
+	if (get_user(ctrl.ifno, &uioc->ifno) ||
+	    get_user(ctrl.ioctl_code, &uioc->ioctl_code) ||
 	    __get_user(udata, &uioc->data))
 		return -EFAULT;
 	ctrl.data = compat_ptr(udata);

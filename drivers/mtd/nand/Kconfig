@@ -163,6 +163,38 @@ config MTD_NAND_S3C2410_HWECC
 	  incorrect ECC generation, and if using these, the default of
 	  software ECC is preferable.
 
+choice
+	prompt "Nand Flash Capacity select"
+	depends on MTD
+	help
+	   EmbedSky Board Nand Flash Capacity select
+
+config EmbedSky_64MB_NAND
+	boolean "64MB Nand for EmbedSky Board"
+	depends on MTD
+	help
+	  Set 64MB Nand parts
+
+config EmbedSky_128MB_NAND
+	boolean "128MB Nand for EmbedSky Board"
+	depends on MTD
+	help
+	  Set 128MB Nand parts
+
+config EmbedSky_more_than_256MB_NAND
+	boolean "256MB~1GB Nand for EmbedSky Board"
+	depends on MTD
+	help
+	  Set 256MB~1GB Nand parts
+
+config EmbedSky_1GB_NAND
+	boolean "1GB Nand for Boardcon Board"
+	depends on MTD
+	help
+	  Set 1GB Nand parts
+
+endchoice	
+
 config MTD_NAND_NDFC
 	tristate "NDFC NanD Flash Controller"
 	depends on 4xx

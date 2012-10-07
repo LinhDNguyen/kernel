@@ -84,15 +84,17 @@ struct nfs_write_data *nfs_writedata_alloc(unsigned int pagecount)
 	return p;
 }
 
-void nfs_writedata_free(struct nfs_write_data *p)
+static void nfs_writedata_free(struct nfs_write_data *p)
 {
 	if (p && (p->pagevec != &p->page_array[0]))
 		kfree(p->pagevec);
 	mempool_free(p, nfs_wdata_mempool);
 }
 
-static void nfs_writedata_release(struct nfs_write_data *wdata)
+void nfs_writedata_release(void *data)
 {
+	struct nfs_write_data *wdata = data;
+
 	put_nfs_open_context(wdata->args.context);
 	nfs_writedata_free(wdata);
 }

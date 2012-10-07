@@ -466,4 +466,16 @@ config TOUCHSCREEN_TSC2007
 	  To compile this driver as a module, choose M here: the
 	  module will be called tsc2007.
 
+config TOUCHSCREEN_TQ2440
+	tristate "EmbedSky TQ2440 TouchScreen input driver"
+	depends on ARCH_S3C2410 && INPUT && INPUT_TOUCHSCREEN && TQ2440_ADC
+	help
+	  Say Y here if you have the TQ2440 TouchScreen.
+          and depends on TQ2440_ADC
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called tq2440_ts.
+
 endif

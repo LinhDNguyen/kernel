@@ -45,3 +45,4 @@ obj-$(CONFIG_S3C24XX_SPI_BUS1_GPG5_GPG6_GPG7)    += spi-bus1-gpg5_6_7.o
 # machine common support
 
 obj-$(CONFIG_MACH_SMDK)		+= common-smdk.o
+obj-$(CONFIG_MACH_EMBEDSKY)		+= common-EmbedSky.o

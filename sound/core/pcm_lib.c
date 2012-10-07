@@ -125,32 +125,23 @@ void snd_pcm_playback_silence(struct snd_pcm_substream *substream, snd_pcm_ufram
 	}
 }
 
-#ifdef CONFIG_SND_PCM_XRUN_DEBUG
-#define xrun_debug(substream)	((substream)->pstr->xrun_debug)
-#else
-#define xrun_debug(substream)	0
-#endif
-
-#define dump_stack_on_xrun(substream) do {	\
-		if (xrun_debug(substream) > 1)	\
-			dump_stack();		\
-	} while (0)
-
 static void xrun(struct snd_pcm_substream *substream)
 {
 	snd_pcm_stop(substream, SNDRV_PCM_STATE_XRUN);
-	if (xrun_debug(substream)) {
+#ifdef CONFIG_SND_PCM_XRUN_DEBUG
+	if (substream->pstr->xrun_debug) {
 		snd_printd(KERN_DEBUG "XRUN: pcmC%dD%d%c\n",
 			   substream->pcm->card->number,
 			   substream->pcm->device,
 			   substream->stream ? 'c' : 'p');
-		dump_stack_on_xrun(substream);
+		if (substream->pstr->xrun_debug > 1)
+			dump_stack();
 	}
+#endif
 }
 
-static snd_pcm_uframes_t
-snd_pcm_update_hw_ptr_pos(struct snd_pcm_substream *substream,
-			  struct snd_pcm_runtime *runtime)
+static inline snd_pcm_uframes_t snd_pcm_update_hw_ptr_pos(struct snd_pcm_substream *substream,
+							  struct snd_pcm_runtime *runtime)
 {
 	snd_pcm_uframes_t pos;
 
@@ -159,21 +150,17 @@ snd_pcm_update_hw_ptr_pos(struct snd_pcm_substream *substream,
 	pos = substream->ops->pointer(substream);
 	if (pos == SNDRV_PCM_POS_XRUN)
 		return pos; /* XRUN */
+#ifdef CONFIG_SND_DEBUG
 	if (pos >= runtime->buffer_size) {
-		if (printk_ratelimit()) {
-			snd_printd(KERN_ERR  "BUG: stream = %i, pos = 0x%lx, "
-				   "buffer size = 0x%lx, period size = 0x%lx\n",
-				   substream->stream, pos, runtime->buffer_size,
-				   runtime->period_size);
-		}
-		pos = 0;
+		snd_printk(KERN_ERR  "BUG: stream = %i, pos = 0x%lx, buffer size = 0x%lx, period size = 0x%lx\n", substream->stream, pos, runtime->buffer_size, runtime->period_size);
 	}
+#endif
 	pos -= pos % runtime->min_align;
 	return pos;
 }
 
-static int snd_pcm_update_hw_ptr_post(struct snd_pcm_substream *substream,
-				      struct snd_pcm_runtime *runtime)
+static inline int snd_pcm_update_hw_ptr_post(struct snd_pcm_substream *substream,
+					     struct snd_pcm_runtime *runtime)
 {
 	snd_pcm_uframes_t avail;
 
@@ -195,113 +182,48 @@ static int snd_pcm_update_hw_ptr_post(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-#define hw_ptr_error(substream, fmt, args...)				\
-	do {								\
-		if (xrun_debug(substream)) {				\
-			if (printk_ratelimit()) {			\
-				snd_printd("PCM: " fmt, ##args);	\
-			}						\
-			dump_stack_on_xrun(substream);			\
-		}							\
-	} while (0)
-
-static int snd_pcm_update_hw_ptr_interrupt(struct snd_pcm_substream *substream)
+static inline int snd_pcm_update_hw_ptr_interrupt(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	snd_pcm_uframes_t pos;
-	snd_pcm_uframes_t old_hw_ptr, new_hw_ptr, hw_ptr_interrupt, hw_base;
-	snd_pcm_sframes_t hdelta, delta;
-	unsigned long jdelta;
+	snd_pcm_uframes_t new_hw_ptr, hw_ptr_interrupt;
+	snd_pcm_sframes_t delta;
 
-	old_hw_ptr = runtime->status->hw_ptr;
 	pos = snd_pcm_update_hw_ptr_pos(substream, runtime);
 	if (pos == SNDRV_PCM_POS_XRUN) {
 		xrun(substream);
 		return -EPIPE;
 	}
-	hw_base = runtime->hw_ptr_base;
-	new_hw_ptr = hw_base + pos;
+	if (runtime->period_size == runtime->buffer_size)
+		goto __next_buf;
+	new_hw_ptr = runtime->hw_ptr_base + pos;
 	hw_ptr_interrupt = runtime->hw_ptr_interrupt + runtime->period_size;
-	delta = new_hw_ptr - hw_ptr_interrupt;
-	if (hw_ptr_interrupt >= runtime->boundary) {
-		hw_ptr_interrupt -= runtime->boundary;
-		if (hw_base < runtime->boundary / 2)
-			/* hw_base was already lapped; recalc delta */
-			delta = new_hw_ptr - hw_ptr_interrupt;
-	}
-	if (delta < 0) {
-		delta += runtime->buffer_size;
-		if (delta < 0) {
-			hw_ptr_error(substream, 
-				     "Unexpected hw_pointer value "
-				     "(stream=%i, pos=%ld, intr_ptr=%ld)\n",
-				     substream->stream, (long)pos,
-				     (long)hw_ptr_interrupt);
-			/* rebase to interrupt position */
-			hw_base = new_hw_ptr = hw_ptr_interrupt;
-			/* align hw_base to buffer_size */
-			hw_base -= hw_base % runtime->buffer_size;
-			delta = 0;
-		} else {
-			hw_base += runtime->buffer_size;
-			if (hw_base >= runtime->boundary)
-				hw_base = 0;
-			new_hw_ptr = hw_base + pos;
+
+	delta = hw_ptr_interrupt - new_hw_ptr;
+	if (delta > 0) {
+		if ((snd_pcm_uframes_t)delta < runtime->buffer_size / 2) {
+#ifdef CONFIG_SND_PCM_XRUN_DEBUG
+			if (runtime->periods > 1 && substream->pstr->xrun_debug) {
+				snd_printd(KERN_ERR "Unexpected hw_pointer value [1] (stream = %i, delta: -%ld, max jitter = %ld): wrong interrupt acknowledge?\n", substream->stream, (long) delta, runtime->buffer_size / 2);
+				if (substream->pstr->xrun_debug > 1)
+					dump_stack();
+			}
+#endif
+			return 0;
 		}
+	      __next_buf:
+		runtime->hw_ptr_base += runtime->buffer_size;
+		if (runtime->hw_ptr_base == runtime->boundary)
+			runtime->hw_ptr_base = 0;
+		new_hw_ptr = runtime->hw_ptr_base + pos;
 	}
 
-	/* Do jiffies check only in xrun_debug mode */
-	if (!xrun_debug(substream))
-		goto no_jiffies_check;
-
-	/* Skip the jiffies check for hardwares with BATCH flag.
-	 * Such hardware usually just increases the position at each IRQ,
-	 * thus it can't give any strange position.
-	 */
-	if (runtime->hw.info & SNDRV_PCM_INFO_BATCH)
-		goto no_jiffies_check;
-	hdelta = new_hw_ptr - old_hw_ptr;
-	jdelta = jiffies - runtime->hw_ptr_jiffies;
-	if (((hdelta * HZ) / runtime->rate) > jdelta + HZ/100) {
-		delta = jdelta /
-			(((runtime->period_size * HZ) / runtime->rate)
-								+ HZ/100);
-		hw_ptr_error(substream,
-			     "hw_ptr skipping! [Q] "
-			     "(pos=%ld, delta=%ld, period=%ld, "
-			     "jdelta=%lu/%lu/%lu)\n",
-			     (long)pos, (long)hdelta,
-			     (long)runtime->period_size, jdelta,
-			     ((hdelta * HZ) / runtime->rate), delta);
-		hw_ptr_interrupt = runtime->hw_ptr_interrupt +
-				   runtime->period_size * delta;
-		if (hw_ptr_interrupt >= runtime->boundary)
-			hw_ptr_interrupt -= runtime->boundary;
-		/* rebase to interrupt position */
-		hw_base = new_hw_ptr = hw_ptr_interrupt;
-		/* align hw_base to buffer_size */
-		hw_base -= hw_base % runtime->buffer_size;
-		delta = 0;
-	}
- no_jiffies_check:
-	if (delta > runtime->period_size + runtime->period_size / 2) {
-		hw_ptr_error(substream,
-			     "Lost interrupts? "
-			     "(stream=%i, delta=%ld, intr_ptr=%ld)\n",
-			     substream->stream, (long)delta,
-			     (long)hw_ptr_interrupt);
-		/* rebase hw_ptr_interrupt */
-		hw_ptr_interrupt =
-			new_hw_ptr - new_hw_ptr % runtime->period_size;
-	}
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK &&
 	    runtime->silence_size > 0)
 		snd_pcm_playback_silence(substream, new_hw_ptr);
 
-	runtime->hw_ptr_base = hw_base;
 	runtime->status->hw_ptr = new_hw_ptr;
-	runtime->hw_ptr_jiffies = jiffies;
-	runtime->hw_ptr_interrupt = hw_ptr_interrupt;
+	runtime->hw_ptr_interrupt = new_hw_ptr - new_hw_ptr % runtime->period_size;
 
 	return snd_pcm_update_hw_ptr_post(substream, runtime);
 }
@@ -311,9 +233,8 @@ int snd_pcm_update_hw_ptr(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	snd_pcm_uframes_t pos;
-	snd_pcm_uframes_t old_hw_ptr, new_hw_ptr, hw_base;
+	snd_pcm_uframes_t old_hw_ptr, new_hw_ptr;
 	snd_pcm_sframes_t delta;
-	unsigned long jdelta;
 
 	old_hw_ptr = runtime->status->hw_ptr;
 	pos = snd_pcm_update_hw_ptr_pos(substream, runtime);
@@ -321,44 +242,30 @@ int snd_pcm_update_hw_ptr(struct snd_pcm_substream *substream)
 		xrun(substream);
 		return -EPIPE;
 	}
-	hw_base = runtime->hw_ptr_base;
-	new_hw_ptr = hw_base + pos;
+	new_hw_ptr = runtime->hw_ptr_base + pos;
 
-	delta = new_hw_ptr - old_hw_ptr;
-	jdelta = jiffies - runtime->hw_ptr_jiffies;
-	if (delta < 0) {
-		delta += runtime->buffer_size;
-		if (delta < 0) {
-			hw_ptr_error(substream, 
-				     "Unexpected hw_pointer value [2] "
-				     "(stream=%i, pos=%ld, old_ptr=%ld, jdelta=%li)\n",
-				     substream->stream, (long)pos,
-				     (long)old_hw_ptr, jdelta);
+	delta = old_hw_ptr - new_hw_ptr;
+	if (delta > 0) {
+		if ((snd_pcm_uframes_t)delta < runtime->buffer_size / 2) {
+#ifdef CONFIG_SND_PCM_XRUN_DEBUG
+			if (runtime->periods > 2 && substream->pstr->xrun_debug) {
+				snd_printd(KERN_ERR "Unexpected hw_pointer value [2] (stream = %i, delta: -%ld, max jitter = %ld): wrong interrupt acknowledge?\n", substream->stream, (long) delta, runtime->buffer_size / 2);
+				if (substream->pstr->xrun_debug > 1)
+					dump_stack();
+			}
+#endif
 			return 0;
 		}
-		hw_base += runtime->buffer_size;
-		if (hw_base >= runtime->boundary)
-			hw_base = 0;
-		new_hw_ptr = hw_base + pos;
-	}
-	/* Do jiffies check only in xrun_debug mode */
-	if (xrun_debug(substream) &&
-	    ((delta * HZ) / runtime->rate) > jdelta + HZ/100) {
-		hw_ptr_error(substream,
-			     "hw_ptr skipping! "
-			     "(pos=%ld, delta=%ld, period=%ld, jdelta=%lu/%lu)\n",
-			     (long)pos, (long)delta,
-			     (long)runtime->period_size, jdelta,
-			     ((delta * HZ) / runtime->rate));
-		return 0;
+		runtime->hw_ptr_base += runtime->buffer_size;
+		if (runtime->hw_ptr_base == runtime->boundary)
+			runtime->hw_ptr_base = 0;
+		new_hw_ptr = runtime->hw_ptr_base + pos;
 	}
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK &&
 	    runtime->silence_size > 0)
 		snd_pcm_playback_silence(substream, new_hw_ptr);
 
-	runtime->hw_ptr_base = hw_base;
 	runtime->status->hw_ptr = new_hw_ptr;
-	runtime->hw_ptr_jiffies = jiffies;
 
 	return snd_pcm_update_hw_ptr_post(substream, runtime);
 }
@@ -876,24 +783,47 @@ static int snd_interval_ratden(struct snd_interval *i,
 int snd_interval_list(struct snd_interval *i, unsigned int count, unsigned int *list, unsigned int mask)
 {
         unsigned int k;
-	struct snd_interval list_range;
+	int changed = 0;
 
 	if (!count) {
 		i->empty = 1;
 		return -EINVAL;
 	}
-	snd_interval_any(&list_range);
-	list_range.min = UINT_MAX;
-	list_range.max = 0;
         for (k = 0; k < count; k++) {
 		if (mask && !(mask & (1 << k)))
 			continue;
-		if (!snd_interval_test(i, list[k]))
-			continue;
-		list_range.min = min(list_range.min, list[k]);
-		list_range.max = max(list_range.max, list[k]);
+                if (i->min == list[k] && !i->openmin)
+                        goto _l1;
+                if (i->min < list[k]) {
+                        i->min = list[k];
+			i->openmin = 0;
+			changed = 1;
+                        goto _l1;
+                }
         }
-	return snd_interval_refine(i, &list_range);
+        i->empty = 1;
+        return -EINVAL;
+ _l1:
+        for (k = count; k-- > 0;) {
+		if (mask && !(mask & (1 << k)))
+			continue;
+                if (i->max == list[k] && !i->openmax)
+                        goto _l2;
+                if (i->max > list[k]) {
+                        i->max = list[k];
+			i->openmax = 0;
+			changed = 1;
+                        goto _l2;
+                }
+        }
+        i->empty = 1;
+        return -EINVAL;
+ _l2:
+	if (snd_interval_checkempty(i)) {
+		i->empty = 1;
+		return -EINVAL;
+	}
+        return changed;
 }
 
 EXPORT_SYMBOL(snd_interval_list);

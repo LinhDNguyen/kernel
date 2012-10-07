@@ -174,7 +174,7 @@ struct acpi_processor_throttling {
 	cpumask_var_t shared_cpu_map;
 	int (*acpi_processor_get_throttling) (struct acpi_processor * pr);
 	int (*acpi_processor_set_throttling) (struct acpi_processor * pr,
-					      int state, bool force);
+					      int state);
 
 	u32 address;
 	u8 duty_offset;
@@ -320,8 +320,7 @@ static inline int acpi_processor_ppc_has_changed(struct acpi_processor *pr)
 /* in processor_throttling.c */
 int acpi_processor_tstate_has_changed(struct acpi_processor *pr);
 int acpi_processor_get_throttling_info(struct acpi_processor *pr);
-extern int acpi_processor_set_throttling(struct acpi_processor *pr,
-					 int state, bool force);
+extern int acpi_processor_set_throttling(struct acpi_processor *pr, int state);
 extern const struct file_operations acpi_processor_throttling_fops;
 extern void acpi_processor_throttling_init(void);
 /* in processor_idle.c */

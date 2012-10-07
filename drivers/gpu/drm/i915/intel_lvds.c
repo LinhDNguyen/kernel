@@ -420,21 +420,8 @@ static const struct dmi_system_id intel_no_lvds[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "Studio Hybrid 140g"),
 		},
 	},
-	{
-		.callback = intel_no_lvds_dmi_callback,
-		.ident = "AOpen Mini PC",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "AOpen"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "i965GMx-IF"),
-		},
-	},
-	{
-		.callback = intel_no_lvds_dmi_callback,
-		.ident = "Aopen i945GTt-VFA",
-		.matches = {
-			DMI_MATCH(DMI_PRODUCT_VERSION, "AO00001JW"),
-		},
-	},
+
+	/* FIXME: add a check for the Aopen Mini PC */
 
 	{ }	/* terminating entry */
 };

@@ -934,28 +934,26 @@ static int can_do_hugetlb_shm(void)
 	return capable(CAP_IPC_LOCK) || in_group_p(sysctl_hugetlb_shm_group);
 }
 
-struct file *hugetlb_file_setup(const char *name, size_t size, int acctflag,
-						struct user_struct **user)
+struct file *hugetlb_file_setup(const char *name, size_t size, int acctflag)
 {
 	int error = -ENOMEM;
+	int unlock_shm = 0;
 	struct file *file;
 	struct inode *inode;
 	struct dentry *dentry, *root;
 	struct qstr quick_string;
+	struct user_struct *user = current_user();
 
-	*user = NULL;
 	if (!hugetlbfs_vfsmount)
 		return ERR_PTR(-ENOENT);
 
 	if (!can_do_hugetlb_shm()) {
-		*user = current_user();
-		if (user_shm_lock(size, *user)) {
+		if (user_shm_lock(size, user)) {
+			unlock_shm = 1;
 			WARN_ONCE(1,
 			  "Using mlock ulimits for SHM_HUGETLB deprecated\n");
-		} else {
-			*user = NULL;
+		} else
 			return ERR_PTR(-EPERM);
-		}
 	}
 
 	root = hugetlbfs_vfsmount->mnt_root;
@@ -996,10 +994,8 @@ out_inode:
 out_dentry:
 	dput(dentry);
 out_shm_unlock:
-	if (*user) {
-		user_shm_unlock(size, *user);
-		*user = NULL;
-	}
+	if (unlock_shm)
+		user_shm_unlock(size, user);
 	return ERR_PTR(error);
 }
 

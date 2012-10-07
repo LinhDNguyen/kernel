@@ -4,6 +4,11 @@
 #
 # Licensed under GPLv2
 
+config ARCH_S3C2440
+	bool
+	help
+	  S3C2440
+
 config CPU_S3C2440
 	bool
 	depends on ARCH_S3C2410
@@ -13,6 +18,7 @@ config CPU_S3C2440
 	select S3C2410_GPIO
 	select S3C2440_DMA if S3C2410_DMA
 	select CPU_S3C244X
+	select ARCH_S3C2440
 	select CPU_LLSERIAL_S3C2440
 	help
 	  Support for S3C2440 Samsung Mobile CPU based systems.
@@ -54,7 +60,14 @@ config MACH_RX3715
 	help
 	  Say Y here if you are using the HP iPAQ rx3715.
 
-config ARCH_S3C2440
+config ARCH_TQ2440
+	bool "EmbedSky SKY2440/TQ2440 Board"
+	select CPU_S3C2440
+	select MACH_EMBEDSKY
+	help
+	  Say Y here if you are using the SKY2440/TQ2440.
+
+config ARCH_SMDK2440
 	bool "SMDK2440"
 	select CPU_S3C2440
 	select MACH_SMDK
@@ -69,8 +82,8 @@ config MACH_NEXCODER_2440
 
 config SMDK2440_CPU2440
 	bool "SMDK2440 with S3C2440 CPU module"
-	depends on ARCH_S3C2440
-	default y if ARCH_S3C2440
+	depends on ARCH_SMDK2440
+	default y if ARCH_SMDK2440
 	select CPU_S3C2440
 
 config MACH_AT2440EVB

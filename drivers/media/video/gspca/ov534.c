@@ -832,11 +832,9 @@ static void sd_pkt_scan(struct gspca_dev *gspca_dev, struct gspca_frame *frame,
 	__u32 this_pts;
 	u16 this_fid;
 	int remaining_len = len;
-	int payload_len;
 
-	payload_len = (sd->sensor == SENSOR_OV772X) ? 2048 : 2040;
 	do {
-		len = min(remaining_len, payload_len);
+		len = min(remaining_len, 2040);		/*fixme: was 2048*/
 
 		/* Payloads are prefixed with a UVC-style header.  We
 		   consider a frame to start when the FID toggles, or the PTS

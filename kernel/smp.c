@@ -57,7 +57,7 @@ hotplug_cfd(struct notifier_block *nfb, unsigned long action, void *hcpu)
 			return NOTIFY_BAD;
 		break;
 
-#ifdef CONFIG_HOTPLUG_CPU
+#ifdef CONFIG_CPU_HOTPLUG
 	case CPU_UP_CANCELED:
 	case CPU_UP_CANCELED_FROZEN:
 
