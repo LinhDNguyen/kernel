@@ -40,7 +40,7 @@ static struct button_irq_desc button_irqs [] = {
 	{IRQ_EINT0,	S3C2410_GPF(0),	S3C2410_GPF0_EINT0,	3, "KEY4"}, /* K4 */
 };
 
-static volatile char key_values [] = {'0', '0', '0', '0'};
+static volatile char key_values [] = {0, '0', 0, '0', 0, '0', 0, '0'};
 
 static DECLARE_WAIT_QUEUE_HEAD(button_waitq);
 
@@ -54,9 +54,10 @@ static irqreturn_t irq_interrupt(int irq, void *dev_id)
 
 	down = !gpio_get_value(button_irqs->pin);
 
-	if (down != (key_values[button_irqs->number] & 1))
+	if (down != (key_values[button_irqs->number * 2 + 1] & 1))
 	{
-		key_values[button_irqs->number] = '0' + down;
+		key_values[button_irqs->number * 2 + 1] = '0' + down;
+		key_values[button_irqs->number * 2] ^= 1;
 		ev_press = 1;
 		wake_up_interruptible(&button_waitq);
 	}
