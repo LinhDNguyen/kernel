@@ -46,7 +46,7 @@ static struct button_irq_desc button_irqs [] = {
 	{IRQ_EINT0,	S3C2410_GPF0,	S3C2410_GPF0_EINT0,	3, "KEY4"}, /* K4 */
 };
 #endif
-static volatile char key_values [] = {'0', '0', '0', '0'};
+static volatile char key_values [] = {0, '0', 0, '0', 0, '0', 0, '0'};
 
 static DECLARE_WAIT_QUEUE_HEAD(button_waitq);
 
@@ -60,9 +60,10 @@ static irqreturn_t irq_interrupt(int irq, void *dev_id)
 
 	down = !s3c2410_gpio_getpin(button_irqs->pin);
 
-	if (down != (key_values[button_irqs->number] & 1))
+	if (down != (key_values[button_irqs->number * 2 + 1] & 1))
 	{
-		key_values[button_irqs->number] = '0' + down;
+		key_values[button_irqs->number * 2 + 1] = '0' + down;
+		key_values[button_irqs->number * 2] ^= 1;
 		ev_press = 1;
 		wake_up_interruptible(&button_waitq);
 	}
@@ -82,8 +83,9 @@ static int tq2440_irq_open(struct inode *inode, struct file *file)
 			continue;
 		err = request_irq(button_irqs[i].irq, irq_interrupt, IRQ_TYPE_EDGE_BOTH, 
                           button_irqs[i].name, (void *)&button_irqs[i]);
-		if (err)
+		if (err) {
 			break;
+		}
 	}
 
 	if (err)
@@ -133,7 +135,6 @@ static int tq2440_irq_read(struct file *filp, char __user *buff, size_t count, l
 	}
 
 	ev_press = 0;
-
 	err = copy_to_user(buff, (const void *)key_values, min(sizeof(key_values), count));
 
 	return err ? -EFAULT : min(sizeof(key_values), count);
